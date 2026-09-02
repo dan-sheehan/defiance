@@ -1,4 +1,4 @@
-"""Command-line entry points for the Milestone 1 vertical slice."""
+"""Command-line entry points for Defiance corpus builds and inspection."""
 
 from __future__ import annotations
 
@@ -6,6 +6,12 @@ import argparse
 from pathlib import Path
 import sys
 
+from .corpus import (
+    CorpusSummary,
+    build_corpus as build_full_corpus,
+    validate_existing_corpus,
+)
+from .corpus_inventory import create_corpus_inventory
 from .db import ValidationError, load_slice
 from .fetch import SourceError, fetch_and_preserve, load_config, verify_preserved
 from .parse import ParseError, parse_box_score, parse_recap
@@ -16,6 +22,7 @@ REPOSITORY_ROOT = Path.cwd().resolve()
 CONFIG_PATH = REPOSITORY_ROOT / "config" / "2017" / "one_game.json"
 RAW_DIR = REPOSITORY_ROOT / "data" / "raw"
 DATABASE_PATH = REPOSITORY_ROOT / "data" / "normalized" / "milestone1.sqlite3"
+FULL_DATABASE_PATH = REPOSITORY_ROOT / "data" / "normalized" / "2017.sqlite3"
 
 
 def build_slice() -> str:
@@ -101,10 +108,38 @@ def format_game(result: dict[str, object]) -> str:
     return "\n".join(lines)
 
 
+def format_corpus_summary(summary: CorpusSummary) -> str:
+    return "\n".join(
+        (
+            f"Sources: {summary.available_in_scope_sources} available in scope "
+            f"of {summary.discovered_sources} discovered",
+            f"Games: {summary.games}; box scores: {summary.box_scores}; "
+            f"recap sources: {summary.recap_sources}",
+            f"Play-by-play: {summary.play_by_play_games} games, "
+            f"{summary.play_by_play_passages} ordered half-inning passages",
+            f"Narrative: {summary.article_sources} sources, "
+            f"{summary.article_passages} passages",
+            f"Documented gaps: {summary.gaps}; reviewed conflicts: {summary.conflicts}",
+        )
+    )
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="defiance")
     subcommands = parser.add_subparsers(dest="command", required=True)
     subcommands.add_parser("build-slice", help="fetch, validate, and load Milestone 1")
+    subcommands.add_parser(
+        "inventory-corpus",
+        help="discover and preserve the reviewed 2017 SDSU archive boundary",
+    )
+    subcommands.add_parser(
+        "build-corpus",
+        help="validate preserved 2017 sources and rebuild the normalized corpus",
+    )
+    subcommands.add_parser(
+        "validate-corpus",
+        help="validate preserved 2017 sources and the normalized corpus",
+    )
     show = subcommands.add_parser("show-game", help="show one normalized game")
     show.add_argument("game_id")
     return parser
@@ -117,6 +152,29 @@ def main(argv: list[str] | None = None) -> int:
             game_id = build_slice()
             print(f"Built Milestone 1 game: {game_id}")
             print(f"Database: {DATABASE_PATH}")
+        elif arguments.command == "inventory-corpus":
+            manifest = create_corpus_inventory(REPOSITORY_ROOT)
+            sources = manifest["sources"]
+            assert isinstance(sources, list)
+            available = sum(
+                source["in_scope"] and source["status"] == "available"
+                for source in sources
+            )
+            print(
+                f"Inventoried {len(sources)} sources; "
+                f"preserved {available} available in-scope sources."
+            )
+            print(f"Inventory: {REPOSITORY_ROOT / 'config' / '2017' / 'corpus.json'}")
+        elif arguments.command == "build-corpus":
+            summary = build_full_corpus(REPOSITORY_ROOT, FULL_DATABASE_PATH)
+            print("Built and validated the 2017 SDSU corpus.")
+            print(format_corpus_summary(summary))
+            print(f"Database: {FULL_DATABASE_PATH}")
+        elif arguments.command == "validate-corpus":
+            summary = validate_existing_corpus(REPOSITORY_ROOT, FULL_DATABASE_PATH)
+            print("Validated the 2017 SDSU corpus.")
+            print(format_corpus_summary(summary))
+            print(f"Database: {FULL_DATABASE_PATH}")
         else:
             print(format_game(show_game(DATABASE_PATH, arguments.game_id)))
     except (ParseError, QueryError, SourceError, ValidationError, OSError) as exc:

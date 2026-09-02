@@ -1,44 +1,86 @@
 # Defiance
 
 Defiance V1 is a source-backed historical system for the 2017 San Diego State
-baseball season. V1 is limited to material currently archived by SDSU.
+baseball season. V1 is limited to material archived on the SDSU website.
 
-The first milestone proves one complete, deterministic path:
+The data path is deterministic:
 
 ```text
-SDSU source → preserved bytes → normalized SQLite rows → inspected result
+SDSU sources → preserved bytes → normalized rows → validation → SQLite
 ```
 
-## Milestone 1
+## 2017 corpus
 
-Milestone 1 contains only SDSU's February 17, 2017 game against Pacific. The
-game was suspended and completed February 18, but the legacy box report's game
-metadata identifies it as the February 17 game. The combined recap is reduced
-to the ordered passages about that opener. Play-by-play is not ingested.
+The reviewed inventory is committed at `config/2017/corpus.json`. It records the
+original URL, inclusion decision, SHA-256, local raw path, game relationships,
+known gaps, and reviewed source conflicts. The current inventory contains:
 
-The two configured sources are:
+- 248 discovered source entries: 225 available and in scope, 22 explicitly
+  excluded, and one unavailable;
+- all 63 scheduled games and the 33-player, seven-member staff roster;
+- complete overall and conference season batting, pitching, and fielding tables;
+- 60 available game box scores and recap coverage for every game, including
+  shared doubleheader recaps;
+- 770 ordered play-by-play passages from the 43 games whose box reports contain
+  play-by-play;
+- 1,758 ordered passages from 151 included game, series, postseason, and season
+  honor source entries.
 
-- [Legacy SDSU box score](https://sandiegost_ftp.sidearmsports.com/custompages/sports/m-basebl/stats/021817aaa.html)
-- [SDSU recap](https://goaztecs.com/news/2017/02/18/aztecs-win-halted-game-drop-nightcap-to-pacific)
+The normalized database is generated at `data/normalized/2017.sqlite3`. Every
+factual row carries a source ID and source locator. Play-by-play is preserved at
+the source's half-inning narrative granularity; no plate-appearance fields are
+inferred from prose.
 
-The legacy host has a certificate hostname incompatibility. Defiance retains
-certificate-chain validation but disables hostname matching only for that exact
-box-score host, refuses cross-host redirects, and requires the reviewed SHA-256.
+## Commands
 
-## Development
-
-The repository uses Python 3.12 and [`uv`](https://docs.astral.sh/uv/).
+The repository uses Python 3.12 and [`uv`](https://docs.astral.sh/uv/). Use the
+source tree directly:
 
 ```bash
-uv sync --locked --no-editable
-uv run --no-sync defiance build-slice
-uv run --no-sync defiance show-game 2017-02-17-pacific
-uv run --no-sync python -m unittest discover -s tests
+PYTHONPATH=src uv run --no-sync python -m defiance.cli inventory-corpus
+PYTHONPATH=src uv run --no-sync python -m defiance.cli build-corpus
+PYTHONPATH=src uv run --no-sync python -m defiance.cli validate-corpus
+PYTHONPATH=src uv run --no-sync python -m unittest discover -s tests -v
 ```
 
-`build-slice` contacts the two configured SDSU sources. The test suite is fully
-offline. Downloaded source documents and generated SQLite databases stay out
-of Git.
+`inventory-corpus` contacts the SDSU archive, rechecks the reviewed discovery
+boundary, and preserves source bytes. `build-corpus` and `validate-corpus` are
+offline: they verify every available in-scope raw file against its inventory
+hash before parsing or querying the database.
+
+Downloaded documents and generated SQLite databases stay out of Git. The test
+suite uses small committed source-format fixtures; its full-corpus integration
+test runs when the preserved local corpus is present and otherwise skips.
+
+The original one-game milestone remains available:
+
+```bash
+PYTHONPATH=src uv run --no-sync python -m defiance.cli build-slice
+PYTHONPATH=src uv run --no-sync python -m defiance.cli show-game 2017-02-17-pacific
+```
+
+## Known archive gaps and conflicts
+
+SDSU has no archived box-score link for the May 20 Fresno State game, the May 28
+Fresno State Mountain West final, or the June 2 Long Beach State NCAA Regional
+game. Seventeen other available box reports omit their `GAME.PLY` section, so
+play-by-play is unavailable for 20 games in total. The SDSU PDF link for final
+season statistics returns 404; the complete SDSU HTML statistics remain
+available and are ingested.
+
+Five contradictions are retained in both the inventory and database:
+
+- April 13 at UNLV: schedule 3–6, box score 3–7;
+- April 25 vs. UC Riverside: schedule 4–6, box score 4–7;
+- home record: schedule 19–12, final statistics 19–11;
+- away record: schedule 19–8, final statistics 19–9;
+- conference record: SDSU's NCAA Central page 21–10, final statistics 20–10.
+
+The contemporaneous box scores control the two game scores, and the final
+season-statistics page controls the record summaries. These resolutions follow
+the PRD's source-authority order while preserving both reported values. Optional
+game statistics absent from a source are stored as `NULL`; zero is used only
+when the source explicitly supplies that category.
 
 Defiance-authored code is covered by this repository's MIT license. SDSU source
 material remains the property of its original publisher and is preserved only
