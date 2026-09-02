@@ -14,5 +14,17 @@ jobs:
           version: "0.12.9"
           python-version: "3.12"
           enable-cache: true
-      - run: uv sync --locked --no-editable
-      - run: uv run --no-sync python -m unittest discover -s tests
+      - name: Sync editable installation
+        run: uv sync --locked
+      - name: Smoke-test editable import and CLI
+        run: |
+          uv run --no-sync python -c "import defiance; print(defiance.__file__)"
+          uv run --no-sync defiance --help
+      - name: Sync non-editable installation
+        run: uv sync --locked --no-editable --reinstall-package defiance
+      - name: Smoke-test installed import and CLI
+        run: |
+          uv run --no-sync python -c "import defiance; print(defiance.__file__)"
+          uv run --no-sync defiance --help
+      - name: Run tests
+        run: uv run --no-sync python -m unittest discover -s tests
