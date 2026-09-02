@@ -1,16 +1,22 @@
 from __future__ import annotations
 
 from collections import Counter
+from contextlib import redirect_stdout
+import io
 import json
 from pathlib import Path
 import sqlite3
 import tempfile
 import unittest
+from unittest.mock import patch
 
+from defiance import cli
+from defiance.cli import format_game
 from defiance.corpus import build_corpus, validate_existing_corpus
 from defiance.corpus_inventory import KNOWN_CONFLICTS, load_corpus_inventory
 from defiance.corpus_parse import parse_article, parse_corpus_box_score
 from defiance.db import ValidationError
+from defiance.query import show_game
 
 
 ROOT = Path(__file__).parents[1]
@@ -109,6 +115,20 @@ class CorpusParserTest(unittest.TestCase):
         self.assertEqual(passages[0].source_locator, "embed-html/block[1]")
 
 
+class CorpusCliTest(unittest.TestCase):
+    def test_show_game_uses_full_corpus_database(self) -> None:
+        game_id = "2017-04-15-unlv"
+        with (
+            patch.object(cli, "show_game") as query,
+            patch.object(cli, "format_game", return_value="rendered"),
+            redirect_stdout(io.StringIO()),
+        ):
+            status = cli.main(["show-game", game_id])
+
+        self.assertEqual(status, 0)
+        query.assert_called_once_with(cli.FULL_DATABASE_PATH, game_id)
+
+
 @unittest.skipUnless(_raw_corpus_is_present(), "preserved full corpus is not present")
 class LocalFullCorpusTest(unittest.TestCase):
     def test_offline_build_is_idempotent_and_validated(self) -> None:
@@ -119,6 +139,21 @@ class LocalFullCorpusTest(unittest.TestCase):
             validated = validate_existing_corpus(ROOT, database)
             self.assertEqual(first, second)
             self.assertEqual(second, validated)
+
+            game = show_game(database, "2017-04-15-unlv")
+            self.assertEqual(game["game"]["opponent"], "UNLV")
+            self.assertEqual(
+                (game["game"]["sdsu_score"], game["game"]["opponent_score"]),
+                (16, 3),
+            )
+            self.assertEqual(len(game["batting"]), 15)
+            self.assertEqual(len(game["pitching"]), 3)
+            self.assertEqual(len(game["recap_passages"]), 12)
+            rendered = format_game(game)
+            self.assertIn("Game: 2017-04-15 vs. UNLV", rendered)
+            self.assertIn("Final: San Diego State 16, UNLV 3", rendered)
+            self.assertIn("SH unknown", rendered)
+            self.assertIn("https://goaztecs.com/news/2017/04/15/", rendered)
 
             with sqlite3.connect(database) as connection:
                 counts = {

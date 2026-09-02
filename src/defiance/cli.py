@@ -54,6 +54,10 @@ def _evidence(row: dict[str, object]) -> str:
     )
 
 
+def _stat(value: object) -> object:
+    return "unknown" if value is None else value
+
+
 def format_game(result: dict[str, object]) -> str:
     game = result["game"]
     assert isinstance(game, dict)
@@ -73,10 +77,11 @@ def format_game(result: dict[str, object]) -> str:
                     f"- {row['full_name']} ({row['position']}): "
                     f"AB {row['ab']}, R {row['r']}, H {row['h']}, RBI {row['rbi']}, "
                     f"BB {row['bb']}, SO {row['so']}, PO {row['po']}, A {row['a']}, LOB {row['lob']}; "
-                    f"2B {row['doubles']}, 3B {row['triples']}, HR {row['home_runs']}, "
-                    f"HBP {row['hit_by_pitch']}, SH {row['sacrifice_hits']}, "
-                    f"SF {row['sacrifice_flies']}, SB {row['stolen_bases']}, "
-                    f"CS {row['caught_stealing']}, E {row['errors']}"
+                    f"2B {_stat(row['doubles'])}, 3B {_stat(row['triples'])}, "
+                    f"HR {_stat(row['home_runs'])}, HBP {_stat(row['hit_by_pitch'])}, "
+                    f"SH {_stat(row['sacrifice_hits'])}, SF {_stat(row['sacrifice_flies'])}, "
+                    f"SB {_stat(row['stolen_bases'])}, CS {_stat(row['caught_stealing'])}, "
+                    f"E {_stat(row['errors'])}"
                 ),
                 f"  {_evidence(row)}",
             )
@@ -94,7 +99,8 @@ def format_game(result: dict[str, object]) -> str:
                     f"- {row['full_name']}{decision}: IP {innings}, H {row['h']}, "
                     f"R {row['r']}, ER {row['er']}, BB {row['bb']}, SO {row['so']}, "
                     f"WP {row['wp']}, BK {row['bk']}, HBP {row['hbp']}, IBB {row['ibb']}, "
-                    f"AB {row['ab']}, BF {row['bf']}, FO {row['fo']}, GO {row['go']}, NP {row['np']}"
+                    f"AB {row['ab']}, BF {row['bf']}, FO {row['fo']}, GO {row['go']}, "
+                    f"NP {_stat(row['np'])}"
                 ),
                 f"  {_evidence(row)}",
             )
@@ -176,7 +182,7 @@ def main(argv: list[str] | None = None) -> int:
             print(format_corpus_summary(summary))
             print(f"Database: {FULL_DATABASE_PATH}")
         else:
-            print(format_game(show_game(DATABASE_PATH, arguments.game_id)))
+            print(format_game(show_game(FULL_DATABASE_PATH, arguments.game_id)))
     except (ParseError, QueryError, SourceError, ValidationError, OSError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

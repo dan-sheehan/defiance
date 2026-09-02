@@ -40,6 +40,7 @@ source tree directly:
 PYTHONPATH=src uv run --no-sync python -m defiance.cli inventory-corpus
 PYTHONPATH=src uv run --no-sync python -m defiance.cli build-corpus
 PYTHONPATH=src uv run --no-sync python -m defiance.cli validate-corpus
+PYTHONPATH=src uv run --no-sync python -m defiance.cli show-game 2017-04-15-unlv
 PYTHONPATH=src uv run --no-sync python -m unittest discover -s tests -v
 ```
 
@@ -52,7 +53,8 @@ Downloaded documents and generated SQLite databases stay out of Git. The test
 suite uses small committed source-format fixtures; its full-corpus integration
 test runs when the preserved local corpus is present and otherwise skips.
 
-The original one-game milestone remains available:
+`show-game` reads the completed corpus database. The original one-game builder
+remains available separately, and its game is also present in the full corpus:
 
 ```bash
 PYTHONPATH=src uv run --no-sync python -m defiance.cli build-slice
