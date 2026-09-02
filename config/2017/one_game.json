@@ -1,0 +1,16 @@
+{
+  "sources": [
+    {
+      "source_id": "sdsu-2017-02-17-pacific-box-score",
+      "url": "https://sandiegost_ftp.sidearmsports.com/custompages/sports/m-basebl/stats/021817aaa.html",
+      "kind": "box_score",
+      "sha256": "1e7ab47eb99ca0f8b3c1cc74e06006d3a915d9199b7f5ab540c488e02f65954a"
+    },
+    {
+      "source_id": "sdsu-2017-02-17-pacific-recap",
+      "url": "https://goaztecs.com/news/2017/02/18/aztecs-win-halted-game-drop-nightcap-to-pacific",
+      "kind": "recap",
+      "sha256": "18656929455bf739b3e4e747a3666de392209a4f8dd9be5528abd1d004f18205"
+    }
+  ]
+}
