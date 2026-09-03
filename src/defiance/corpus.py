@@ -27,6 +27,9 @@ class CorpusSummary:
     discovered_sources: int
     available_in_scope_sources: int
     games: int
+    series: int
+    events: int
+    schedule_group_memberships: int
     box_scores: int
     recap_sources: int
     play_by_play_games: int
@@ -154,9 +157,11 @@ def corpus_summary(data: CorpusData) -> CorpusSummary:
     sources = data.manifest["sources"]
     gaps = data.manifest["known_gaps"]
     conflicts = data.manifest["known_conflicts"]
+    schedule_groups = data.manifest["schedule_groups"]
     assert isinstance(sources, list)
     assert isinstance(gaps, list)
     assert isinstance(conflicts, list)
+    assert isinstance(schedule_groups, list)
     return CorpusSummary(
         discovered_sources=len(sources),
         available_in_scope_sources=sum(
@@ -164,6 +169,11 @@ def corpus_summary(data: CorpusData) -> CorpusSummary:
             for source in sources
         ),
         games=len(data.manifest["games"]),
+        series=sum(group["group_type"] == "series" for group in schedule_groups),
+        events=sum(group["group_type"] == "event" for group in schedule_groups),
+        schedule_group_memberships=sum(
+            len(group["members"]) for group in schedule_groups
+        ),
         box_scores=len(data.box_scores),
         recap_sources=sum(
             source["kind"] == "recap" and source["status"] == "available"

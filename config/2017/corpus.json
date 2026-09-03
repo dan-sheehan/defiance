@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "season": 2017,
   "source_boundary": "San Diego State website only",
   "discovered_at": "2026-09-02",
@@ -3926,6 +3926,484 @@
       "box_score_source_id": "sdsu-2017-06-04-long-beach-state-box-score",
       "recap_source_id": "sdsu-2017-news-2017-06-04-baseball-run-comes-to-an-end-on-third-day-of-ncaa-regional",
       "play_by_play_available": true
+    }
+  ],
+  "schedule_groups": [
+    {
+      "group_id": "series-2017-pacific-home",
+      "group_type": "series",
+      "label": "Pacific home series",
+      "opponent": "Pacific",
+      "source_id": "sdsu-2017-news-2017-02-19-aztec-capture-series-with-shutout-win-over-pacific",
+      "source_locator": "embed-html/block[3]",
+      "members": [
+        {
+          "game_id": "2017-02-17-pacific",
+          "group_order": 1,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[1]"
+        },
+        {
+          "game_id": "2017-02-18-pacific",
+          "group_order": 2,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[2]"
+        },
+        {
+          "game_id": "2017-02-19-pacific",
+          "group_order": 3,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[3]"
+        }
+      ]
+    },
+    {
+      "group_id": "series-2017-cal-poly-home",
+      "group_type": "series",
+      "label": "Cal Poly home series",
+      "opponent": "Cal Poly",
+      "source_id": "sdsu-2017-news-2017-03-01-aztecs-host-cal-poly-for-three-game-series",
+      "source_locator": "embed-html/block[3]",
+      "members": [
+        {
+          "game_id": "2017-03-03-cal-poly",
+          "group_order": 1,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[10]"
+        },
+        {
+          "game_id": "2017-03-04-cal-poly",
+          "group_order": 2,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[11]"
+        },
+        {
+          "game_id": "2017-03-05-cal-poly",
+          "group_order": 3,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[12]"
+        }
+      ]
+    },
+    {
+      "group_id": "series-2017-nevada-away",
+      "group_type": "series",
+      "label": "Nevada road series",
+      "opponent": "Nevada",
+      "source_id": "sdsu-2017-news-2017-03-10-aztecs-open-series-at-nevada-this-afternoon",
+      "source_locator": "embed-html/block[2]",
+      "members": [
+        {
+          "game_id": "2017-03-10-nevada",
+          "group_order": 1,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[14]"
+        },
+        {
+          "game_id": "2017-03-11-nevada",
+          "group_order": 2,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[15]"
+        },
+        {
+          "game_id": "2017-03-12-nevada",
+          "group_order": 3,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[16]"
+        }
+      ]
+    },
+    {
+      "group_id": "series-2017-unlv-home",
+      "group_type": "series",
+      "label": "UNLV home series",
+      "opponent": "UNLV",
+      "source_id": "sdsu-2017-news-2017-03-15-aztecs-open-conference-home-play-with-series-vs-unlv",
+      "source_locator": "embed-html/block[3]",
+      "members": [
+        {
+          "game_id": "2017-03-17-unlv",
+          "group_order": 1,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[18]"
+        },
+        {
+          "game_id": "2017-03-18-unlv",
+          "group_order": 2,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[19]"
+        },
+        {
+          "game_id": "2017-03-19-unlv",
+          "group_order": 3,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[20]"
+        }
+      ]
+    },
+    {
+      "group_id": "series-2017-fresno-state-away",
+      "group_type": "series",
+      "label": "Fresno State road series",
+      "opponent": "Fresno State",
+      "source_id": "sdsu-2017-news-2017-03-22-aztecs-visit-fresno-state-for-three-game-mw-series",
+      "source_locator": "embed-html/block[3]",
+      "members": [
+        {
+          "game_id": "2017-03-25-fresno-state-1",
+          "group_order": 1,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[22]"
+        },
+        {
+          "game_id": "2017-03-25-fresno-state-2",
+          "group_order": 2,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[23]"
+        },
+        {
+          "game_id": "2017-03-26-fresno-state",
+          "group_order": 3,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[24]"
+        }
+      ]
+    },
+    {
+      "group_id": "series-2017-san-jose-state-home",
+      "group_type": "series",
+      "label": "San Jose State home series",
+      "opponent": "San Jose State",
+      "source_id": "sdsu-2017-news-2017-03-29-aztecs-host-mw-series-vs-san-jose-state",
+      "source_locator": "embed-html/block[3]",
+      "members": [
+        {
+          "game_id": "2017-03-31-san-jose-state",
+          "group_order": 1,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[26]"
+        },
+        {
+          "game_id": "2017-04-01-san-jose-state",
+          "group_order": 2,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[27]"
+        },
+        {
+          "game_id": "2017-04-02-san-jose-state",
+          "group_order": 3,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[28]"
+        }
+      ]
+    },
+    {
+      "group_id": "series-2017-nevada-home",
+      "group_type": "series",
+      "label": "Nevada home series",
+      "opponent": "Nevada",
+      "source_id": "sdsu-2017-news-2017-04-06-aztecs-set-to-host-nevada-for-three-game-conference-series",
+      "source_locator": "embed-html/block[3]",
+      "members": [
+        {
+          "game_id": "2017-04-07-nevada",
+          "group_order": 1,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[31]"
+        },
+        {
+          "game_id": "2017-04-08-nevada",
+          "group_order": 2,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[32]"
+        },
+        {
+          "game_id": "2017-04-09-nevada",
+          "group_order": 3,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[33]"
+        }
+      ]
+    },
+    {
+      "group_id": "series-2017-unlv-away",
+      "group_type": "series",
+      "label": "UNLV road series",
+      "opponent": "UNLV",
+      "source_id": "sdsu-2017-news-2017-04-12-aztecs-travel-to-las-vegas-for-mw-baseball-series",
+      "source_locator": "embed-html/block[3]",
+      "members": [
+        {
+          "game_id": "2017-04-13-unlv",
+          "group_order": 1,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[35]"
+        },
+        {
+          "game_id": "2017-04-14-unlv",
+          "group_order": 2,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[36]"
+        },
+        {
+          "game_id": "2017-04-15-unlv",
+          "group_order": 3,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[37]"
+        }
+      ]
+    },
+    {
+      "group_id": "series-2017-uc-santa-barbara-away",
+      "group_type": "series",
+      "label": "UC Santa Barbara road series",
+      "opponent": "UC Santa Barbara",
+      "source_id": "sdsu-2017-news-2017-04-21-aztecs-open-three-game-series-at-uc-santa-barbara-this-afternoon",
+      "source_locator": "embed-html/block[2]",
+      "members": [
+        {
+          "game_id": "2017-04-21-uc-santa-barbara",
+          "group_order": 1,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[39]"
+        },
+        {
+          "game_id": "2017-04-22-uc-santa-barbara",
+          "group_order": 2,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[40]"
+        },
+        {
+          "game_id": "2017-04-23-uc-santa-barbara",
+          "group_order": 3,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[41]"
+        }
+      ]
+    },
+    {
+      "group_id": "series-2017-new-mexico-home",
+      "group_type": "series",
+      "label": "New Mexico home series",
+      "opponent": "New Mexico",
+      "source_id": "sdsu-2017-news-2017-04-27-aztecs-set-for-series-vsnew-mexico-this-weekend",
+      "source_locator": "embed-html/block[3]",
+      "members": [
+        {
+          "game_id": "2017-04-28-new-mexico",
+          "group_order": 1,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[43]"
+        },
+        {
+          "game_id": "2017-04-29-new-mexico",
+          "group_order": 2,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[44]"
+        },
+        {
+          "game_id": "2017-04-30-new-mexico",
+          "group_order": 3,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[45]"
+        }
+      ]
+    },
+    {
+      "group_id": "series-2017-san-jose-state-away",
+      "group_type": "series",
+      "label": "San Jose State road series",
+      "opponent": "San Jose State",
+      "source_id": "sdsu-2017-news-2017-05-03-aztecs-visit-san-jose-state-for-three-game-baseball-series",
+      "source_locator": "embed-html/block[3]",
+      "members": [
+        {
+          "game_id": "2017-05-05-san-jose-state",
+          "group_order": 1,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[47]"
+        },
+        {
+          "game_id": "2017-05-06-san-jose-state",
+          "group_order": 2,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[48]"
+        },
+        {
+          "game_id": "2017-05-07-san-jose-state",
+          "group_order": 3,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[49]"
+        }
+      ]
+    },
+    {
+      "group_id": "series-2017-air-force-away",
+      "group_type": "series",
+      "label": "Air Force road series",
+      "opponent": "Air Force",
+      "source_id": "sdsu-2017-news-2017-05-10-aztecs-visit-air-force-for-mw-baseball-series",
+      "source_locator": "embed-html/block[3]",
+      "members": [
+        {
+          "game_id": "2017-05-12-air-force",
+          "group_order": 1,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[50]"
+        },
+        {
+          "game_id": "2017-05-13-air-force",
+          "group_order": 2,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[51]"
+        },
+        {
+          "game_id": "2017-05-14-air-force",
+          "group_order": 3,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[52]"
+        }
+      ]
+    },
+    {
+      "group_id": "series-2017-san-diego-season",
+      "group_type": "series",
+      "label": "San Diego season series",
+      "opponent": "San Diego",
+      "source_id": "sdsu-2017-news-2017-05-16-aztec-down-toreros-9-5-to-win-season-series",
+      "source_locator": "embed-html/block[3]",
+      "members": [
+        {
+          "game_id": "2017-03-14-san-diego",
+          "group_order": 1,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[17]"
+        },
+        {
+          "game_id": "2017-05-16-san-diego",
+          "group_order": 2,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[53]"
+        }
+      ]
+    },
+    {
+      "group_id": "series-2017-fresno-state-home",
+      "group_type": "series",
+      "label": "Fresno State home series",
+      "opponent": "Fresno State",
+      "source_id": "sdsu-2017-news-2017-05-17-aztecs-host-fresno-state-for-final-regular-season-series",
+      "source_locator": "embed-html/block[3]",
+      "members": [
+        {
+          "game_id": "2017-05-18-fresno-state",
+          "group_order": 1,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[54]"
+        },
+        {
+          "game_id": "2017-05-19-fresno-state",
+          "group_order": 2,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[55]"
+        },
+        {
+          "game_id": "2017-05-20-fresno-state",
+          "group_order": 3,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[56]"
+        }
+      ]
+    },
+    {
+      "group_id": "event-2017-tony-gwynn-legacy",
+      "group_type": "event",
+      "label": "Tony Gwynn Legacy",
+      "opponent": null,
+      "source_id": "sdsu-2017-schedule",
+      "source_locator": "schedule/tournament[Tony Gwynn Legacy]",
+      "members": [
+        {
+          "game_id": "2017-02-24-tennessee",
+          "group_order": 1,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[6]"
+        },
+        {
+          "game_id": "2017-02-25-seton-hall",
+          "group_order": 2,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[7]"
+        },
+        {
+          "game_id": "2017-02-25-notre-dame",
+          "group_order": 3,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[8]"
+        }
+      ]
+    },
+    {
+      "group_id": "event-2017-mountain-west-tournament",
+      "group_type": "event",
+      "label": "Mountain West Tournament",
+      "opponent": null,
+      "source_id": "sdsu-2017-schedule",
+      "source_locator": "schedule/tournament[Mountain West Tournament]",
+      "members": [
+        {
+          "game_id": "2017-05-25-fresno-state",
+          "group_order": 1,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[57]"
+        },
+        {
+          "game_id": "2017-05-26-new-mexico",
+          "group_order": 2,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[58]"
+        },
+        {
+          "game_id": "2017-05-27-fresno-state",
+          "group_order": 3,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[59]"
+        },
+        {
+          "game_id": "2017-05-28-fresno-state",
+          "group_order": 4,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[60]"
+        }
+      ]
+    },
+    {
+      "group_id": "event-2017-ncaa-tournament",
+      "group_type": "event",
+      "label": "NCAA Tournament",
+      "opponent": null,
+      "source_id": "sdsu-2017-schedule",
+      "source_locator": "schedule/tournament[NCAA Tournament]",
+      "members": [
+        {
+          "game_id": "2017-06-02-long-beach-state",
+          "group_order": 1,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[61]"
+        },
+        {
+          "game_id": "2017-06-03-ucla",
+          "group_order": 2,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[62]"
+        },
+        {
+          "game_id": "2017-06-04-long-beach-state",
+          "group_order": 3,
+          "source_id": "sdsu-2017-schedule",
+          "source_locator": "schedule/event[63]"
+        }
+      ]
     }
   ],
   "known_gaps": [

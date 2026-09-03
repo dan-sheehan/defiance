@@ -17,7 +17,9 @@ known gaps, and reviewed source conflicts. The current inventory contains:
 
 - 248 discovered source entries: 225 available and in scope, 22 explicitly
   excluded, and one unavailable;
-- all 63 scheduled games and the 33-player, seven-member staff roster;
+- all 63 scheduled games, 14 explicitly reviewed series, three tournament
+  events, 51 ordered group memberships, and the 33-player, seven-member staff
+  roster;
 - complete overall and conference season batting, pitching, and fielding tables;
 - 60 available game box scores and recap coverage for every game, including
   shared doubleheader recaps;
@@ -30,6 +32,12 @@ The normalized database is generated at `data/normalized/2017.sqlite3`. Every
 factual row carries a source ID and source locator. Play-by-play is preserved at
 the source's half-inning narrative granularity; no plate-appearance fields are
 inferred from prose.
+
+Series and event membership is explicit rather than inferred at query time.
+Separate home and road series against the same opponent have distinct IDs, and
+each group plus each ordered game membership retains SDSU provenance. Group
+records are derived and validated from the canonical game scores. Tournament
+meetings are event members and are not relabeled as regular series.
 
 ## Commands
 
@@ -50,8 +58,11 @@ offline: they verify every available in-scope raw file against its inventory
 hash before parsing or querying the database.
 
 Downloaded documents and generated SQLite databases stay out of Git. The test
-suite uses small committed source-format fixtures; its full-corpus integration
-test runs when the preserved local corpus is present and otherwise skips.
+suite uses small committed source-format fixtures for roster, schedule, season
+batting, season pitching, team facts, box scores, and recaps. Those parser and
+grouping tests run offline in a clean checkout; the exhaustive full-corpus
+integration test runs when the preserved local corpus is present and otherwise
+skips.
 
 `show-game` reads the completed corpus database. The original one-game builder
 remains available separately, and its game is also present in the full corpus:

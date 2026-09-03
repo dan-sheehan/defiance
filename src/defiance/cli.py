@@ -121,6 +121,8 @@ def format_corpus_summary(summary: CorpusSummary) -> str:
             f"of {summary.discovered_sources} discovered",
             f"Games: {summary.games}; box scores: {summary.box_scores}; "
             f"recap sources: {summary.recap_sources}",
+            f"Schedule groups: {summary.series} series, {summary.events} events, "
+            f"{summary.schedule_group_memberships} memberships",
             f"Play-by-play: {summary.play_by_play_games} games, "
             f"{summary.play_by_play_passages} ordered half-inning passages",
             f"Narrative: {summary.article_sources} sources, "

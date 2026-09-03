@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 import re
@@ -75,6 +76,33 @@ CREATE TABLE IF NOT EXISTS games (
     schedule_source_locator TEXT NOT NULL CHECK (length(schedule_source_locator) > 0),
     score_source_id TEXT NOT NULL REFERENCES sources(source_id),
     score_source_locator TEXT NOT NULL CHECK (length(score_source_locator) > 0)
+);
+
+CREATE TABLE IF NOT EXISTS schedule_groups (
+    group_id TEXT PRIMARY KEY,
+    group_type TEXT NOT NULL CHECK (group_type IN ('series', 'event')),
+    label TEXT NOT NULL,
+    opponent TEXT,
+    start_date TEXT NOT NULL,
+    end_date TEXT NOT NULL,
+    sdsu_wins INTEGER NOT NULL CHECK (sdsu_wins >= 0),
+    sdsu_losses INTEGER NOT NULL CHECK (sdsu_losses >= 0),
+    source_id TEXT NOT NULL REFERENCES sources(source_id),
+    source_locator TEXT NOT NULL CHECK (length(source_locator) > 0),
+    CHECK (
+        (group_type = 'series' AND opponent IS NOT NULL)
+        OR (group_type = 'event' AND opponent IS NULL)
+    )
+);
+
+CREATE TABLE IF NOT EXISTS schedule_group_games (
+    group_id TEXT NOT NULL REFERENCES schedule_groups(group_id) ON DELETE CASCADE,
+    game_id TEXT NOT NULL REFERENCES games(game_id) ON DELETE CASCADE,
+    group_order INTEGER NOT NULL CHECK (group_order > 0),
+    source_id TEXT NOT NULL REFERENCES sources(source_id),
+    source_locator TEXT NOT NULL CHECK (length(source_locator) > 0),
+    PRIMARY KEY (group_id, game_id),
+    UNIQUE (group_id, group_order)
 );
 
 CREATE TABLE IF NOT EXISTS game_sources (
@@ -332,6 +360,108 @@ def _known_score_conflicts(manifest: dict[str, object]) -> set[tuple[str, str, s
     }
 
 
+def validate_schedule_groups(
+    manifest: dict[str, object],
+    canonical_scores: dict[str, tuple[int, int]],
+) -> dict[str, tuple[str, str, int, int]]:
+    sources = manifest.get("sources")
+    games = manifest.get("games")
+    groups = manifest.get("schedule_groups")
+    if not isinstance(sources, list) or not isinstance(games, list):
+        raise ValidationError("corpus inventory is missing sources or games")
+    if not isinstance(groups, list):
+        raise ValidationError("corpus inventory is missing reviewed schedule groups")
+
+    source_by_id = {str(source["source_id"]): source for source in sources}
+    game_by_id = {str(game["game_id"]): game for game in games}
+    group_ids: set[str] = set()
+    memberships_by_type: dict[str, set[str]] = {"series": set(), "event": set()}
+    results: dict[str, tuple[str, str, int, int]] = {}
+
+    for group in groups:
+        if not isinstance(group, dict):
+            raise ValidationError("reviewed schedule group must be an object")
+        group_id = str(group.get("group_id", ""))
+        group_type = str(group.get("group_type", ""))
+        if not group_id or group_id in group_ids:
+            raise ValidationError(f"duplicate or missing schedule group ID: {group_id!r}")
+        group_ids.add(group_id)
+        if group_type not in memberships_by_type:
+            raise ValidationError(f"invalid schedule group type for {group_id}")
+        if not group.get("label") or not group.get("source_locator"):
+            raise ValidationError(f"schedule group {group_id} lacks provenance")
+        source = source_by_id.get(str(group.get("source_id", "")))
+        if not source or not source["in_scope"] or source["status"] != "available":
+            raise ValidationError(f"schedule group {group_id} references invalid source")
+
+        opponent = group.get("opponent")
+        if group_type == "series" and not opponent:
+            raise ValidationError(f"series {group_id} is missing an opponent")
+        if group_type == "event" and opponent is not None:
+            raise ValidationError(f"event {group_id} must not have an opponent")
+        if group_type == "event" and (
+            group.get("source_id") != "sdsu-2017-schedule"
+            or group.get("source_locator")
+            != f"schedule/tournament[{group.get('label')}]"
+        ):
+            raise ValidationError(f"event {group_id} provenance is invalid")
+
+        members = group.get("members")
+        if not isinstance(members, list) or len(members) < 2:
+            raise ValidationError(f"schedule group {group_id} needs at least two games")
+        orders = [member.get("group_order") for member in members]
+        if orders != list(range(1, len(members) + 1)):
+            raise ValidationError(f"schedule group {group_id} ordering is invalid")
+        member_ids = [str(member.get("game_id", "")) for member in members]
+        if len(member_ids) != len(set(member_ids)):
+            raise ValidationError(f"schedule group {group_id} contains duplicate games")
+
+        schedule_orders = []
+        dates = []
+        wins = 0
+        losses = 0
+        for member, game_id in zip(members, member_ids, strict=True):
+            game = game_by_id.get(game_id)
+            if game is None or game_id not in canonical_scores:
+                raise ValidationError(
+                    f"schedule group {group_id} references unknown game {game_id}"
+                )
+            if game_id in memberships_by_type[group_type]:
+                raise ValidationError(
+                    f"game {game_id} belongs to multiple {group_type} groups"
+                )
+            memberships_by_type[group_type].add(game_id)
+            if member.get("source_id") != game.get("schedule_source_id"):
+                raise ValidationError(
+                    f"schedule group {group_id} membership source is invalid"
+                )
+            expected_locator = f"schedule/event[{game['schedule_order']}]"
+            if member.get("source_locator") != expected_locator:
+                raise ValidationError(
+                    f"schedule group {group_id} membership locator is invalid"
+                )
+            if group_type == "series" and game.get("opponent") != opponent:
+                raise ValidationError(
+                    f"series {group_id} contains opponent {game.get('opponent')}"
+                )
+            if group_type == "event" and game.get("tournament") != group.get("label"):
+                raise ValidationError(
+                    f"event {group_id} contains a game outside {group.get('label')}"
+                )
+            schedule_orders.append(int(game["schedule_order"]))
+            dates.append(str(game["game_date"]))
+            sdsu_score, opponent_score = canonical_scores[game_id]
+            if sdsu_score == opponent_score:
+                raise ValidationError(f"schedule group {group_id} contains a tie")
+            wins += sdsu_score > opponent_score
+            losses += sdsu_score < opponent_score
+        if schedule_orders != sorted(schedule_orders):
+            raise ValidationError(f"schedule group {group_id} games are out of order")
+        results[group_id] = (min(dates), max(dates), wins, losses)
+
+    return results
+
+
 def validate_corpus_data(data: CorpusData) -> None:
     manifest = data.manifest
     sources = manifest.get("sources")
@@ -417,6 +547,7 @@ def validate_corpus_data(data: CorpusData) -> None:
         raise ValidationError(f"expected 60 parsed box scores, found {len(data.box_scores)}")
 
     actual_score_conflicts: set[tuple[str, str, str]] = set()
+    canonical_scores: dict[str, tuple[int, int]] = {}
     total_sdsu_runs = 0
     total_opponent_runs = 0
     wins = 0
@@ -470,6 +601,8 @@ def validate_corpus_data(data: CorpusData) -> None:
                 ):
                     raise ValidationError(f"{game_id} play-by-play ordering is invalid")
 
+        canonical_scores[game_id] = canonical_score
+
         total_sdsu_runs += canonical_score[0]
         total_opponent_runs += canonical_score[1]
         wins += canonical_score[0] > canonical_score[1]
@@ -489,6 +622,16 @@ def validate_corpus_data(data: CorpusData) -> None:
         )
     if pbp_games != 43:
         raise ValidationError(f"expected play-by-play for 43 games, found {pbp_games}")
+
+    schedule_groups = manifest.get("schedule_groups")
+    if not isinstance(schedule_groups, list):
+        raise ValidationError("corpus inventory is missing reviewed schedule groups")
+    group_types = Counter(str(group.get("group_type")) for group in schedule_groups)
+    if group_types != Counter({"series": 14, "event": 3}):
+        raise ValidationError(f"reviewed schedule group coverage is invalid: {group_types}")
+    if sum(len(group.get("members", [])) for group in schedule_groups) != 51:
+        raise ValidationError("reviewed schedule group membership coverage is invalid")
+    validate_schedule_groups(manifest, canonical_scores)
 
     overall_team_batting = next(
         row
@@ -522,6 +665,15 @@ def validate_corpus_data(data: CorpusData) -> None:
         raise ValidationError("article passage coverage does not match the inventory")
     if any(not passages for passages in data.articles.values()):
         raise ValidationError("an in-scope narrative source produced no passages")
+    for group in schedule_groups:
+        source_id = str(group["source_id"])
+        if source_id not in data.articles:
+            continue
+        locators = {passage.source_locator for passage in data.articles[source_id]}
+        if group["source_locator"] not in locators:
+            raise ValidationError(
+                f"schedule group {group['group_id']} source locator is invalid"
+            )
 
 
 def _player_id_map(players: tuple[RosterPlayer, ...]) -> dict[str, str]:
@@ -542,6 +694,8 @@ def _clear_tables(connection: sqlite3.Connection) -> None:
         "season_batting",
         "staff",
         "players",
+        "schedule_group_games",
+        "schedule_groups",
         "game_sources",
         "games",
         "source_conflicts",
@@ -599,10 +753,12 @@ def load_corpus(database_path: Path, data: CorpusData) -> None:
             _clear_tables(connection)
             sources = data.manifest["sources"]
             games = data.manifest["games"]
+            schedule_groups = data.manifest["schedule_groups"]
             gaps = data.manifest["known_gaps"]
             conflicts = data.manifest["known_conflicts"]
             assert isinstance(sources, list)
             assert isinstance(games, list)
+            assert isinstance(schedule_groups, list)
             assert isinstance(gaps, list)
             assert isinstance(conflicts, list)
 
@@ -727,6 +883,53 @@ def load_corpus(database_path: Path, data: CorpusData) -> None:
                     VALUES (?, ?, ?)
                     """,
                     relationships,
+                )
+
+            canonical_scores = {
+                str(game_id): (int(sdsu_score), int(opponent_score))
+                for game_id, sdsu_score, opponent_score in connection.execute(
+                    "SELECT game_id, sdsu_score, opponent_score FROM games"
+                )
+            }
+            group_results = validate_schedule_groups(data.manifest, canonical_scores)
+            for group in schedule_groups:
+                start_date, end_date, wins, losses = group_results[str(group["group_id"])]
+                connection.execute(
+                    """
+                    INSERT INTO schedule_groups(
+                        group_id, group_type, label, opponent, start_date, end_date,
+                        sdsu_wins, sdsu_losses, source_id, source_locator
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        group["group_id"],
+                        group["group_type"],
+                        group["label"],
+                        group["opponent"],
+                        start_date,
+                        end_date,
+                        wins,
+                        losses,
+                        group["source_id"],
+                        group["source_locator"],
+                    ),
+                )
+                connection.executemany(
+                    """
+                    INSERT INTO schedule_group_games(
+                        group_id, game_id, group_order, source_id, source_locator
+                    ) VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        (
+                            group["group_id"],
+                            member["game_id"],
+                            member["group_order"],
+                            member["source_id"],
+                            member["source_locator"],
+                        )
+                        for member in group["members"]
+                    ),
                 )
 
             connection.executemany(
@@ -1038,6 +1241,8 @@ def validate_database(connection: sqlite3.Connection) -> None:
         "source_gaps": 24,
         "source_conflicts": 5,
         "games": 63,
+        "schedule_groups": 17,
+        "schedule_group_games": 51,
         "players": 33,
         "staff": 7,
         "game_sources": 186,
@@ -1073,6 +1278,71 @@ def validate_database(connection: sqlite3.Connection) -> None:
     ).fetchone()
     if game_coverage != (60, 60, 43):
         raise ValidationError(f"normalized game-source coverage is invalid: {game_coverage}")
+    group_types = dict(
+        connection.execute(
+            "SELECT group_type, COUNT(*) FROM schedule_groups GROUP BY group_type"
+        ).fetchall()
+    )
+    if group_types != {"event": 3, "series": 14}:
+        raise ValidationError(f"normalized schedule group coverage is invalid: {group_types}")
+    bad_group_order = connection.execute(
+        """
+        SELECT COUNT(*) FROM (
+            SELECT group_id
+            FROM schedule_group_games
+            GROUP BY group_id
+            HAVING MIN(group_order) <> 1
+                OR MAX(group_order) <> COUNT(*)
+                OR COUNT(DISTINCT group_order) <> COUNT(*)
+        )
+        """
+    ).fetchone()[0]
+    if bad_group_order:
+        raise ValidationError(f"{bad_group_order} schedule groups have invalid ordering")
+    duplicate_group_type_memberships = connection.execute(
+        """
+        SELECT COUNT(*) FROM (
+            SELECT members.game_id, groups.group_type
+            FROM schedule_group_games AS members
+            JOIN schedule_groups AS groups USING (group_id)
+            GROUP BY members.game_id, groups.group_type
+            HAVING COUNT(*) > 1
+        )
+        """
+    ).fetchone()[0]
+    if duplicate_group_type_memberships:
+        raise ValidationError("games belong to multiple groups of the same type")
+    bad_group_memberships = connection.execute(
+        """
+        SELECT COUNT(*)
+        FROM schedule_group_games AS members
+        JOIN schedule_groups AS groups USING (group_id)
+        JOIN games USING (game_id)
+        WHERE (groups.group_type = 'series' AND groups.opponent <> games.opponent)
+           OR (groups.group_type = 'event' AND groups.label <> games.tournament)
+        """
+    ).fetchone()[0]
+    if bad_group_memberships:
+        raise ValidationError(f"{bad_group_memberships} schedule memberships are invalid")
+    bad_group_results = connection.execute(
+        """
+        SELECT COUNT(*) FROM (
+            SELECT groups.group_id
+            FROM schedule_groups AS groups
+            JOIN schedule_group_games AS members USING (group_id)
+            JOIN games USING (game_id)
+            GROUP BY groups.group_id
+            HAVING groups.start_date <> MIN(games.game_date)
+                OR groups.end_date <> MAX(games.game_date)
+                OR groups.sdsu_wins <> SUM(games.sdsu_score > games.opponent_score)
+                OR groups.sdsu_losses <> SUM(games.sdsu_score < games.opponent_score)
+        )
+        """
+    ).fetchone()[0]
+    if bad_group_results:
+        raise ValidationError(
+            f"{bad_group_results} schedule group results disagree with canonical games"
+        )
     game_totals = connection.execute(
         """
         SELECT SUM(sdsu_score), SUM(opponent_score),
@@ -1133,6 +1403,8 @@ def validate_database(connection: sqlite3.Connection) -> None:
         "season_records",
         "season_inning_runs",
         "season_stat_notes",
+        "schedule_groups",
+        "schedule_group_games",
         "game_batting",
         "game_pitching",
         "play_by_play",

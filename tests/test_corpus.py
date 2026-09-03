@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from copy import deepcopy
 from contextlib import redirect_stdout
 import io
 import json
@@ -13,8 +14,19 @@ from unittest.mock import patch
 from defiance import cli
 from defiance.cli import format_game
 from defiance.corpus import build_corpus, validate_existing_corpus
-from defiance.corpus_inventory import KNOWN_CONFLICTS, load_corpus_inventory
-from defiance.corpus_parse import parse_article, parse_corpus_box_score
+from defiance.corpus_db import validate_schedule_groups
+from defiance.corpus_inventory import (
+    KNOWN_CONFLICTS,
+    load_corpus_inventory,
+    parse_schedule_events,
+    reviewed_schedule_groups,
+)
+from defiance.corpus_parse import (
+    parse_article,
+    parse_corpus_box_score,
+    parse_roster,
+    parse_season_statistics,
+)
 from defiance.db import ValidationError
 from defiance.query import show_game
 
@@ -38,6 +50,8 @@ class CorpusInventoryTest(unittest.TestCase):
         manifest = load_corpus_inventory(MANIFEST)
         sources = manifest["sources"]
         games = manifest["games"]
+        groups = manifest["schedule_groups"]
+        self.assertEqual(manifest["schema_version"], 2)
         self.assertEqual(len(sources), 248)
         self.assertEqual(len(games), 63)
         self.assertEqual(Counter(source["status"] for source in sources), {
@@ -59,9 +73,117 @@ class CorpusInventoryTest(unittest.TestCase):
             43,
         )
         self.assertTrue(all(game["recap_source_id"] for game in games))
+        self.assertEqual(
+            Counter(group["group_type"] for group in groups),
+            {"series": 14, "event": 3},
+        )
+        self.assertEqual(sum(len(group["members"]) for group in groups), 51)
+        self.assertEqual(groups, reviewed_schedule_groups(games))
+        fresno_series = {
+            group["group_id"]: [member["game_id"] for member in group["members"]]
+            for group in groups
+            if group["group_type"] == "series" and group["opponent"] == "Fresno State"
+        }
+        self.assertEqual(
+            fresno_series,
+            {
+                "series-2017-fresno-state-away": [
+                    "2017-03-25-fresno-state-1",
+                    "2017-03-25-fresno-state-2",
+                    "2017-03-26-fresno-state",
+                ],
+                "series-2017-fresno-state-home": [
+                    "2017-05-18-fresno-state",
+                    "2017-05-19-fresno-state",
+                    "2017-05-20-fresno-state",
+                ],
+            },
+        )
 
 
 class CorpusParserTest(unittest.TestCase):
+    def test_compact_roster_fixture_is_parsed_offline(self) -> None:
+        players, staff = parse_roster(
+            (FIXTURES / "roster_2017_compact.html").read_bytes()
+        )
+        self.assertEqual(
+            [(player.player_id, player.jersey_number, player.position) for player in players],
+            [("danny-sheehan", "8", "INF"), ("brett-seeburger", "33", "LHP")],
+        )
+        self.assertEqual(
+            [(member.full_name, member.title) for member in staff],
+            [("Mark Martinez", "Head Coach")],
+        )
+        self.assertTrue(all(player.source_locator for player in players))
+
+    def test_compact_schedule_fixture_is_parsed_offline(self) -> None:
+        events = parse_schedule_events(
+            (FIXTURES / "schedule_2017_compact.html").read_bytes(),
+            expected_events=3,
+        )
+        self.assertEqual(
+            [(event.opponent, event.designation, event.result) for event in events],
+            [
+                ("Fresno State", "at", "W 5-4"),
+                ("(3) Fresno State", "vs", "W 18-10"),
+                ("(1) New Mexico", "at", "W 9-8"),
+            ],
+        )
+        self.assertIsNone(events[0].tournament)
+        self.assertEqual(events[1].tournament, "Mountain West Tournament")
+        self.assertEqual(events[2].tournament, "Mountain West Tournament")
+        self.assertTrue(events[0].stats_url and events[0].recap_url)
+
+    def test_compact_season_batting_fixture_is_parsed_offline(self) -> None:
+        statistics = parse_season_statistics(
+            (FIXTURES / "season_statistics_2017_compact.html").read_bytes()
+        )
+        sheehan = next(
+            row
+            for row in statistics.batting
+            if row.scope == "overall" and row.subject_name == "Danny Sheehan"
+        )
+        self.assertEqual(sheehan.values["batting_average"], ".344")
+        self.assertEqual(sheehan.values["hits"], 86)
+        self.assertEqual(sheehan.values["home_runs"], 7)
+
+    def test_compact_season_pitching_fixture_is_parsed_offline(self) -> None:
+        statistics = parse_season_statistics(
+            (FIXTURES / "season_statistics_2017_compact.html").read_bytes()
+        )
+        seeburger = next(
+            row
+            for row in statistics.pitching
+            if row.scope == "overall" and row.subject_name == "Brett Seeburger"
+        )
+        self.assertEqual((seeburger.values["wins"], seeburger.values["losses"]), (10, 3))
+        self.assertEqual(seeburger.values["outs"], 280)
+        self.assertEqual(seeburger.values["strikeouts"], 69)
+
+    def test_compact_team_facts_fixture_is_parsed_offline(self) -> None:
+        statistics = parse_season_statistics(
+            (FIXTURES / "season_statistics_2017_compact.html").read_bytes()
+        )
+        team_batting = next(
+            row
+            for row in statistics.batting
+            if row.scope == "overall" and row.subject_type == "team"
+        )
+        team_pitching = next(
+            row
+            for row in statistics.pitching
+            if row.scope == "overall" and row.subject_type == "team"
+        )
+        records = {record.label: (record.wins, record.losses) for record in statistics.records}
+        inning_runs = {
+            (subject, inning): runs
+            for subject, inning, runs, _ in statistics.inning_runs
+        }
+        self.assertEqual((team_batting.values["runs"], team_pitching.values["runs"]), (421, 298))
+        self.assertEqual(records["Overall"], (42, 21))
+        self.assertEqual(records["Conference"], (20, 10))
+        self.assertEqual(inning_runs[("San Diego State", "Total")], 421)
+
     def test_np_column_and_full_supplemental_sections_are_parsed(self) -> None:
         box = parse_corpus_box_score(
             (FIXTURES / "box_score_2017_02_17.html").read_bytes(),
@@ -115,6 +237,50 @@ class CorpusParserTest(unittest.TestCase):
         self.assertEqual(passages[0].source_locator, "embed-html/block[1]")
 
 
+class ScheduleGroupingTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.manifest = load_corpus_inventory(MANIFEST)
+        self.schedule_scores = {}
+        for game in self.manifest["games"]:
+            sdsu_score, opponent_score = game["result"].split()[1].split("-")
+            self.schedule_scores[game["game_id"]] = (
+                int(sdsu_score),
+                int(opponent_score),
+            )
+
+    def test_series_and_event_results_are_reconciled_from_games(self) -> None:
+        results = validate_schedule_groups(self.manifest, self.schedule_scores)
+        self.assertEqual(
+            results["series-2017-fresno-state-away"],
+            ("2017-03-25", "2017-03-26", 2, 1),
+        )
+        self.assertEqual(
+            results["series-2017-fresno-state-home"],
+            ("2017-05-18", "2017-05-20", 1, 2),
+        )
+        self.assertEqual(
+            results["event-2017-mountain-west-tournament"],
+            ("2017-05-25", "2017-05-28", 3, 1),
+        )
+
+        changed_scores = dict(self.schedule_scores)
+        changed_scores["2017-05-20-fresno-state"] = (12, 11)
+        changed = validate_schedule_groups(self.manifest, changed_scores)
+        self.assertEqual(changed["series-2017-fresno-state-home"][2:], (2, 1))
+
+    def test_duplicate_or_unordered_membership_is_rejected(self) -> None:
+        altered = deepcopy(self.manifest)
+        altered["schedule_groups"][0]["members"][1]["group_order"] = 1
+        with self.assertRaises(ValidationError):
+            validate_schedule_groups(altered, self.schedule_scores)
+
+        altered = deepcopy(self.manifest)
+        members = altered["schedule_groups"][0]["members"]
+        members[1]["game_id"] = members[0]["game_id"]
+        with self.assertRaises(ValidationError):
+            validate_schedule_groups(altered, self.schedule_scores)
+
+
 class CorpusCliTest(unittest.TestCase):
     def test_show_game_uses_full_corpus_database(self) -> None:
         game_id = "2017-04-15-unlv"
@@ -161,6 +327,8 @@ class LocalFullCorpusTest(unittest.TestCase):
                     for table in (
                         "sources",
                         "games",
+                        "schedule_groups",
+                        "schedule_group_games",
                         "players",
                         "game_batting",
                         "game_pitching",
@@ -175,6 +343,8 @@ class LocalFullCorpusTest(unittest.TestCase):
                     {
                         "sources": 248,
                         "games": 63,
+                        "schedule_groups": 17,
+                        "schedule_group_games": 51,
                         "players": 33,
                         "game_batting": 891,
                         "game_pitching": 252,
@@ -201,6 +371,24 @@ class LocalFullCorpusTest(unittest.TestCase):
                     """
                 ).fetchone()
                 self.assertEqual(unknowns, (None, None, None))
+                fresno_series = connection.execute(
+                    """
+                    SELECT sdsu_wins, sdsu_losses
+                    FROM schedule_groups
+                    WHERE group_id = 'series-2017-fresno-state-home'
+                    """
+                ).fetchone()
+                self.assertEqual(fresno_series, (1, 2))
+                missing_box_rows = connection.execute(
+                    """
+                    SELECT
+                        (SELECT COUNT(*) FROM game_batting
+                         WHERE game_id = '2017-05-20-fresno-state'),
+                        (SELECT COUNT(*) FROM game_pitching
+                         WHERE game_id = '2017-05-20-fresno-state')
+                    """
+                ).fetchone()
+                self.assertEqual(missing_box_rows, (0, 0))
 
             with sqlite3.connect(database) as connection:
                 connection.execute(

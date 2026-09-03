@@ -105,6 +105,230 @@ KNOWN_CONFLICTS = [
     },
 ]
 
+REVIEWED_SCHEDULE_GROUPS = (
+    {
+        "group_id": "series-2017-pacific-home",
+        "group_type": "series",
+        "label": "Pacific home series",
+        "opponent": "Pacific",
+        "source_id": "sdsu-2017-news-2017-02-19-aztec-capture-series-with-shutout-win-over-pacific",
+        "source_locator": "embed-html/block[3]",
+        "game_ids": (
+            "2017-02-17-pacific",
+            "2017-02-18-pacific",
+            "2017-02-19-pacific",
+        ),
+    },
+    {
+        "group_id": "series-2017-cal-poly-home",
+        "group_type": "series",
+        "label": "Cal Poly home series",
+        "opponent": "Cal Poly",
+        "source_id": "sdsu-2017-news-2017-03-01-aztecs-host-cal-poly-for-three-game-series",
+        "source_locator": "embed-html/block[3]",
+        "game_ids": (
+            "2017-03-03-cal-poly",
+            "2017-03-04-cal-poly",
+            "2017-03-05-cal-poly",
+        ),
+    },
+    {
+        "group_id": "series-2017-nevada-away",
+        "group_type": "series",
+        "label": "Nevada road series",
+        "opponent": "Nevada",
+        "source_id": "sdsu-2017-news-2017-03-10-aztecs-open-series-at-nevada-this-afternoon",
+        "source_locator": "embed-html/block[2]",
+        "game_ids": (
+            "2017-03-10-nevada",
+            "2017-03-11-nevada",
+            "2017-03-12-nevada",
+        ),
+    },
+    {
+        "group_id": "series-2017-unlv-home",
+        "group_type": "series",
+        "label": "UNLV home series",
+        "opponent": "UNLV",
+        "source_id": "sdsu-2017-news-2017-03-15-aztecs-open-conference-home-play-with-series-vs-unlv",
+        "source_locator": "embed-html/block[3]",
+        "game_ids": (
+            "2017-03-17-unlv",
+            "2017-03-18-unlv",
+            "2017-03-19-unlv",
+        ),
+    },
+    {
+        "group_id": "series-2017-fresno-state-away",
+        "group_type": "series",
+        "label": "Fresno State road series",
+        "opponent": "Fresno State",
+        "source_id": "sdsu-2017-news-2017-03-22-aztecs-visit-fresno-state-for-three-game-mw-series",
+        "source_locator": "embed-html/block[3]",
+        "game_ids": (
+            "2017-03-25-fresno-state-1",
+            "2017-03-25-fresno-state-2",
+            "2017-03-26-fresno-state",
+        ),
+    },
+    {
+        "group_id": "series-2017-san-jose-state-home",
+        "group_type": "series",
+        "label": "San Jose State home series",
+        "opponent": "San Jose State",
+        "source_id": "sdsu-2017-news-2017-03-29-aztecs-host-mw-series-vs-san-jose-state",
+        "source_locator": "embed-html/block[3]",
+        "game_ids": (
+            "2017-03-31-san-jose-state",
+            "2017-04-01-san-jose-state",
+            "2017-04-02-san-jose-state",
+        ),
+    },
+    {
+        "group_id": "series-2017-nevada-home",
+        "group_type": "series",
+        "label": "Nevada home series",
+        "opponent": "Nevada",
+        "source_id": "sdsu-2017-news-2017-04-06-aztecs-set-to-host-nevada-for-three-game-conference-series",
+        "source_locator": "embed-html/block[3]",
+        "game_ids": (
+            "2017-04-07-nevada",
+            "2017-04-08-nevada",
+            "2017-04-09-nevada",
+        ),
+    },
+    {
+        "group_id": "series-2017-unlv-away",
+        "group_type": "series",
+        "label": "UNLV road series",
+        "opponent": "UNLV",
+        "source_id": "sdsu-2017-news-2017-04-12-aztecs-travel-to-las-vegas-for-mw-baseball-series",
+        "source_locator": "embed-html/block[3]",
+        "game_ids": (
+            "2017-04-13-unlv",
+            "2017-04-14-unlv",
+            "2017-04-15-unlv",
+        ),
+    },
+    {
+        "group_id": "series-2017-uc-santa-barbara-away",
+        "group_type": "series",
+        "label": "UC Santa Barbara road series",
+        "opponent": "UC Santa Barbara",
+        "source_id": "sdsu-2017-news-2017-04-21-aztecs-open-three-game-series-at-uc-santa-barbara-this-afternoon",
+        "source_locator": "embed-html/block[2]",
+        "game_ids": (
+            "2017-04-21-uc-santa-barbara",
+            "2017-04-22-uc-santa-barbara",
+            "2017-04-23-uc-santa-barbara",
+        ),
+    },
+    {
+        "group_id": "series-2017-new-mexico-home",
+        "group_type": "series",
+        "label": "New Mexico home series",
+        "opponent": "New Mexico",
+        "source_id": "sdsu-2017-news-2017-04-27-aztecs-set-for-series-vsnew-mexico-this-weekend",
+        "source_locator": "embed-html/block[3]",
+        "game_ids": (
+            "2017-04-28-new-mexico",
+            "2017-04-29-new-mexico",
+            "2017-04-30-new-mexico",
+        ),
+    },
+    {
+        "group_id": "series-2017-san-jose-state-away",
+        "group_type": "series",
+        "label": "San Jose State road series",
+        "opponent": "San Jose State",
+        "source_id": "sdsu-2017-news-2017-05-03-aztecs-visit-san-jose-state-for-three-game-baseball-series",
+        "source_locator": "embed-html/block[3]",
+        "game_ids": (
+            "2017-05-05-san-jose-state",
+            "2017-05-06-san-jose-state",
+            "2017-05-07-san-jose-state",
+        ),
+    },
+    {
+        "group_id": "series-2017-air-force-away",
+        "group_type": "series",
+        "label": "Air Force road series",
+        "opponent": "Air Force",
+        "source_id": "sdsu-2017-news-2017-05-10-aztecs-visit-air-force-for-mw-baseball-series",
+        "source_locator": "embed-html/block[3]",
+        "game_ids": (
+            "2017-05-12-air-force",
+            "2017-05-13-air-force",
+            "2017-05-14-air-force",
+        ),
+    },
+    {
+        "group_id": "series-2017-san-diego-season",
+        "group_type": "series",
+        "label": "San Diego season series",
+        "opponent": "San Diego",
+        "source_id": "sdsu-2017-news-2017-05-16-aztec-down-toreros-9-5-to-win-season-series",
+        "source_locator": "embed-html/block[3]",
+        "game_ids": (
+            "2017-03-14-san-diego",
+            "2017-05-16-san-diego",
+        ),
+    },
+    {
+        "group_id": "series-2017-fresno-state-home",
+        "group_type": "series",
+        "label": "Fresno State home series",
+        "opponent": "Fresno State",
+        "source_id": "sdsu-2017-news-2017-05-17-aztecs-host-fresno-state-for-final-regular-season-series",
+        "source_locator": "embed-html/block[3]",
+        "game_ids": (
+            "2017-05-18-fresno-state",
+            "2017-05-19-fresno-state",
+            "2017-05-20-fresno-state",
+        ),
+    },
+    {
+        "group_id": "event-2017-tony-gwynn-legacy",
+        "group_type": "event",
+        "label": "Tony Gwynn Legacy",
+        "opponent": None,
+        "source_id": "sdsu-2017-schedule",
+        "source_locator": "schedule/tournament[Tony Gwynn Legacy]",
+        "game_ids": (
+            "2017-02-24-tennessee",
+            "2017-02-25-seton-hall",
+            "2017-02-25-notre-dame",
+        ),
+    },
+    {
+        "group_id": "event-2017-mountain-west-tournament",
+        "group_type": "event",
+        "label": "Mountain West Tournament",
+        "opponent": None,
+        "source_id": "sdsu-2017-schedule",
+        "source_locator": "schedule/tournament[Mountain West Tournament]",
+        "game_ids": (
+            "2017-05-25-fresno-state",
+            "2017-05-26-new-mexico",
+            "2017-05-27-fresno-state",
+            "2017-05-28-fresno-state",
+        ),
+    },
+    {
+        "group_id": "event-2017-ncaa-tournament",
+        "group_type": "event",
+        "label": "NCAA Tournament",
+        "opponent": None,
+        "source_id": "sdsu-2017-schedule",
+        "source_locator": "schedule/tournament[NCAA Tournament]",
+        "game_ids": (
+            "2017-06-02-long-beach-state",
+            "2017-06-03-ucla",
+            "2017-06-04-long-beach-state",
+        ),
+    },
+)
+
 
 @dataclass(frozen=True)
 class ScheduleEvent:
@@ -239,7 +463,9 @@ class _ScheduleParser(HTMLParser):
                 self.event = None
 
 
-def parse_schedule_events(content: bytes) -> tuple[ScheduleEvent, ...]:
+def parse_schedule_events(
+    content: bytes, *, expected_events: int = 63
+) -> tuple[ScheduleEvent, ...]:
     parser = _ScheduleParser()
     parser.feed(decode_html(content))
     parser.close()
@@ -267,8 +493,10 @@ def parse_schedule_events(content: bytes) -> tuple[ScheduleEvent, ...]:
                 recap_url=recap_url,
             )
         )
-    if len(events) != 63:
-        raise SourceError(f"expected 63 schedule events, discovered {len(events)}")
+    if len(events) != expected_events:
+        raise SourceError(
+            f"expected {expected_events} schedule events, discovered {len(events)}"
+        )
     return tuple(events)
 
 
@@ -482,6 +710,42 @@ def _source_entry(
         "raw_path": raw_path,
         "notes": notes,
     }
+
+
+def reviewed_schedule_groups(
+    games: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    schedule_order = {
+        str(game["game_id"]): int(game["schedule_order"]) for game in games
+    }
+    groups: list[dict[str, object]] = []
+    for reviewed in REVIEWED_SCHEDULE_GROUPS:
+        members = []
+        for group_order, game_id in enumerate(reviewed["game_ids"], start=1):
+            game_id = str(game_id)
+            members.append(
+                {
+                    "game_id": game_id,
+                    "group_order": group_order,
+                    "source_id": "sdsu-2017-schedule",
+                    "source_locator": f"schedule/event[{schedule_order[game_id]}]",
+                }
+            )
+        groups.append(
+            {
+                key: reviewed[key]
+                for key in (
+                    "group_id",
+                    "group_type",
+                    "label",
+                    "opponent",
+                    "source_id",
+                    "source_locator",
+                )
+            }
+            | {"members": members}
+        )
+    return groups
 
 
 def create_corpus_inventory(repository_root: Path) -> dict[str, object]:
@@ -731,12 +995,13 @@ def create_corpus_inventory(repository_root: Path) -> dict[str, object]:
         raise SourceError(f"duplicate source IDs: {duplicates}")
 
     manifest: dict[str, object] = {
-        "schema_version": 1,
+        "schema_version": 2,
         "season": 2017,
         "source_boundary": "San Diego State website only",
         "discovered_at": "2026-09-02",
         "sources": sorted(sources, key=lambda item: str(item["source_id"])),
         "games": game_records,
+        "schedule_groups": reviewed_schedule_groups(game_records),
         "known_gaps": gaps,
         "known_conflicts": KNOWN_CONFLICTS,
     }
@@ -752,7 +1017,7 @@ def load_corpus_inventory(path: Path) -> dict[str, object]:
         manifest = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise SourceError(f"cannot read corpus inventory {path}: {exc}") from exc
-    if manifest.get("schema_version") != 1 or manifest.get("season") != 2017:
+    if manifest.get("schema_version") != 2 or manifest.get("season") != 2017:
         raise SourceError("unsupported corpus inventory schema or season")
     sources = manifest.get("sources")
     games = manifest.get("games")
