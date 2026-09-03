@@ -54,6 +54,24 @@ least one exact structured selector (game, player, staff, opponent, group, or
 season, as applicable) before optional literal lexical terms are applied. They
 do not accept raw FTS syntax, fuzzy names, or unconstrained corpus-wide search.
 
+## Deterministic questions and answers
+
+`defiance.answer.answer_question(database_path, question)` is the single
+product-level question-answer boundary. It resolves committed exact aliases,
+routes bounded question patterns, and uses only fixed parameterized queries or
+the selector-constrained narrative retrieval layer. Metric and query columns
+are selected from code-owned whitelists; user text is never treated as SQL or
+FTS syntax. Each call is independent and has no conversation memory.
+
+The supported V1 patterns cover season, single-game, opponent, and series
+player statistics; hitter best series; team leaders and record splits; game,
+series, and tournament results; and scoped game, series, tournament, player,
+and staff narrative questions. Results contain source URLs and locators. An
+unknown or ambiguous entity, incomplete aggregate, unsupported question, or
+narrative question without a supporting passage returns an explicit failure
+state instead of a guessed or partial answer. There is no fuzzy matching, model
+provider, generated SQL, embedding index, or conversational fallback.
+
 ## Commands
 
 The repository uses Python 3.12 and [`uv`](https://docs.astral.sh/uv/). Use the
@@ -64,6 +82,7 @@ PYTHONPATH=src uv run --no-sync python -m defiance.cli inventory-corpus
 PYTHONPATH=src uv run --no-sync python -m defiance.cli build-corpus
 PYTHONPATH=src uv run --no-sync python -m defiance.cli validate-corpus
 PYTHONPATH=src uv run --no-sync python -m defiance.cli show-game 2017-04-15-unlv
+PYTHONPATH=src uv run --no-sync python -m defiance.cli ask "How many home runs did Danny Sheehan hit in 2017?"
 PYTHONPATH=src uv run --no-sync python -m unittest discover -s tests -v
 ```
 
@@ -78,6 +97,12 @@ batting, season pitching, team facts, box scores, and recaps. Those parser and
 grouping tests run offline in a clean checkout; the exhaustive full-corpus
 integration test runs when the preserved local corpus is present and otherwise
 skips.
+
+`ask` reads the generated full-corpus database and prints a short answer first,
+followed by compact source references and independently parseable suggestions
+when useful. Routing failures are exposed by the returned `AnswerResult` for
+offline evaluation; no private-testing threshold or automatic model-provider
+trigger is encoded in the application.
 
 `show-game` reads the completed corpus database. The original one-game builder
 remains available separately, and its game is also present in the full corpus:

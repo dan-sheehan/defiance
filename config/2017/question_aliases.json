@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "team": [
+    "San Diego State",
+    "SDSU",
+    "Aztecs",
+    "we",
+    "our"
+  ],
+  "players": {},
+  "staff": {},
+  "opponents": {
+    "Air Force": ["Air Force", "AFA", "Falcons"],
+    "Cal Poly": ["Cal Poly", "Mustangs"],
+    "Cal State Fullerton": ["Cal State Fullerton", "Fullerton", "CSUF", "Titans"],
+    "Fresno State": ["Fresno State", "Fresno", "Bulldogs"],
+    "Long Beach State": ["Long Beach State", "Long Beach", "LBSU", "Dirtbags"],
+    "Nevada": ["Nevada", "Wolf Pack"],
+    "New Mexico": ["New Mexico", "UNM", "Lobos"],
+    "Notre Dame": ["Notre Dame", "Fighting Irish"],
+    "Pacific": ["Pacific", "Tigers"],
+    "San Diego": ["San Diego", "USD", "Toreros"],
+    "San Francisco": ["San Francisco", "USF", "Dons"],
+    "San Jose State": ["San Jose State", "San Jose", "SJSU", "Spartans"],
+    "Seton Hall": ["Seton Hall", "Pirates"],
+    "Tennessee": ["Tennessee", "Volunteers", "Vols"],
+    "UC Irvine": ["UC Irvine", "UCI", "Anteaters"],
+    "UC Riverside": ["UC Riverside", "UCR", "Highlanders"],
+    "UC Santa Barbara": ["UC Santa Barbara", "UCSB", "Gauchos"],
+    "UCLA": ["UCLA", "Bruins"],
+    "UNLV": ["UNLV", "Rebels"],
+    "USC": ["USC", "Trojans"]
+  },
+  "events": {
+    "event-2017-tony-gwynn-legacy": [
+      "Tony Gwynn Legacy",
+      "Tony Gwynn Classic"
+    ],
+    "event-2017-mountain-west-tournament": [
+      "Mountain West Tournament",
+      "MW Tournament",
+      "conference tournament"
+    ],
+    "event-2017-ncaa-tournament": [
+      "NCAA Tournament",
+      "NCAA Regional",
+      "Long Beach Regional",
+      "regional"
+    ]
+  },
+  "record_splits": {
+    "1": ["overall record", "season record"],
+    "2": ["conference record", "Mountain West record", "MW record"],
+    "3": ["non-conference record", "nonconference record"],
+    "4": ["home record", "record at home", "home games"],
+    "5": ["road record", "away record", "record on the road", "away games"],
+    "6": ["neutral-site record", "neutral site record"],
+    "7": ["day-game record", "day games"],
+    "8": ["night-game record", "night games"],
+    "9": ["record against left-handed starters", "record vs left starters"],
+    "10": ["record against right-handed starters", "record vs right starters"],
+    "11": ["one-run games", "1-run games", "one-run record"],
+    "12": ["two-run games", "2-run games", "two-run record"],
+    "13": ["games decided by five or more runs", "5+ run games"],
+    "14": ["extra-inning record", "extra innings"],
+    "15": ["shutout record", "shutouts"],
+    "16": ["record when scoring 0-2 runs"],
+    "17": ["record when scoring 3-5 runs"],
+    "18": ["record when scoring 6-9 runs"],
+    "19": ["record when scoring 10 or more runs"],
+    "20": ["record when allowing 0-2 runs"],
+    "21": ["record when allowing 3-5 runs"],
+    "22": ["record when allowing 6-9 runs"],
+    "23": ["record when allowing 10 or more runs"],
+    "24": ["record when scoring in the first inning"],
+    "25": ["record when the opponent scored in the first inning"],
+    "26": ["record when scoring first", "record when we scored first"],
+    "27": ["record when the opponent scored first"]
+  }
+}

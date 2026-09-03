@@ -6,6 +6,7 @@ import argparse
 from pathlib import Path
 import sys
 
+from .answer import answer_question
 from .corpus import (
     CorpusSummary,
     build_corpus as build_full_corpus,
@@ -150,6 +151,10 @@ def _parser() -> argparse.ArgumentParser:
     )
     show = subcommands.add_parser("show-game", help="show one normalized game")
     show.add_argument("game_id")
+    ask = subcommands.add_parser(
+        "ask", help="ask one standalone question about the 2017 season"
+    )
+    ask.add_argument("question")
     return parser
 
 
@@ -183,8 +188,10 @@ def main(argv: list[str] | None = None) -> int:
             print("Validated the 2017 SDSU corpus.")
             print(format_corpus_summary(summary))
             print(f"Database: {FULL_DATABASE_PATH}")
-        else:
+        elif arguments.command == "show-game":
             print(format_game(show_game(FULL_DATABASE_PATH, arguments.game_id)))
+        else:
+            print(answer_question(FULL_DATABASE_PATH, arguments.question).render())
     except (ParseError, QueryError, SourceError, ValidationError, OSError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
