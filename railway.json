@@ -1,0 +1,14 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "RAILPACK"
+  },
+  "deploy": {
+    "startCommand": "umask 077 && chmod 0444 /data/2017-295f6fb5325f8b82be2d8a12d2ae7106f70560824aca4394c483850d9b6c3245.sqlite3 && python -m defiance.production && exec gunicorn --bind 0.0.0.0:$PORT --workers 1 --worker-class sync --timeout 30 --access-logfile /dev/null --error-logfile - --no-control-socket 'defiance.web:create_app()'",
+    "healthcheckPath": "/healthz",
+    "healthcheckTimeout": 60,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10,
+    "drainingSeconds": "30"
+  }
+}

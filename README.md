@@ -111,6 +111,241 @@ stable evidence source IDs, locators, and original SDSU URLs. It does not record
 accounts, IP addresses, user agents, cookies, conversational state, or any other
 cross-request identity.
 
+## Production deployment on Railway
+
+The V1 production target is one Railway Hobby service in US West, one persistent
+volume mounted at `/data`, and the Railway-provided HTTPS domain. Railpack builds
+the package from `pyproject.toml` and `uv.lock` with Python 3.12 and `uv`.
+Gunicorn runs the existing `defiance.web:create_app()` factory with one
+synchronous worker; the Flask development server is never used in production.
+No Dockerfile, database server, worker service, model provider, or secret is
+needed.
+
+`railway.json` sets mode `0444` on the single pinned corpus filename and runs
+`python -m defiance.production` before Gunicorn on every start. The explicit
+mode step is necessary because Railway's SFTP-based volume upload copies file
+bytes but not the local POSIX mode. It cannot target an environment-controlled
+path. A missing file or failed mode change stops the shell, and the independent
+preflight then refuses to start unless all of these conditions hold:
+
+- Railway reports the mounted volume at exactly `/data`, and both configured
+  database paths resolve inside it and are distinct;
+- the corpus is a regular file with mode `0444` and SHA-256
+  `295f6fb5325f8b82be2d8a12d2ae7106f70560824aca4394c483850d9b6c3245`;
+- the corpus passes SQLite `integrity_check`, `foreign_key_check`, a real FTS5
+  query, and Defiance's complete normalized-corpus validation while opened in
+  SQLite read-only mode;
+- a second hash after validation proves the corpus did not change; and
+- `/data/audit.sqlite3` can be initialized to the current schema, restricted to
+  mode `0600`, and locked for a test write transaction.
+
+The configured health check is `GET /healthz` with a 60-second deployment
+timeout. It verifies both databases and returns only `{"status":"ok"}` or the
+generic unavailable response. A missing or corrupt corpus or unusable audit
+volume prevents Gunicorn from starting. Railway retries a crashed service up to
+10 times. Railway health checks gate deployments but are not continuous
+monitoring, and a volume-backed service has brief downtime during a deployment
+because two deployments cannot mount the volume concurrently.
+
+### First deployment
+
+First validate the exact local artifact and the complete checkout without
+rebuilding or contacting SDSU:
+
+```bash
+uv sync --locked
+PYTHONPATH=src uv run --no-sync python -m defiance.cli validate-corpus
+PYTHONPATH=src uv run --no-sync python -m unittest discover -s tests -v
+shasum -a 256 data/normalized/2017.sqlite3
+```
+
+The final command must print the pinned SHA-256 above. In the Railway dashboard,
+select the Hobby plan and create an empty project. Install and authenticate the
+Railway CLI separately, then link this checkout, create the empty service, and
+place its single replica in US West before connecting its GitHub source:
+
+```bash
+railway login
+railway link
+railway add --service defiance
+railway service defiance
+railway service scale us-west=1
+railway volume add --mount-path /data
+railway volume list
+```
+
+Copy the single volume's name from `railway volume list` into
+`DEFIANCE_VOLUME`. Upload a copy of the already validated database to a
+hash-versioned name. The leading `/` used by `railway volume files` is the
+volume root, which Railway mounts at `/data` for the service. The start command
+applies mode `0444` to this exact pinned filename before the strict preflight.
+Do not use `--overwrite`, do not upload `data/raw`, and do not run
+`build-corpus` in the deployment:
+
+```bash
+DEFIANCE_CORPUS_SHA=295f6fb5325f8b82be2d8a12d2ae7106f70560824aca4394c483850d9b6c3245
+DEFIANCE_CORPUS_NAME="2017-${DEFIANCE_CORPUS_SHA}.sqlite3"
+DEFIANCE_VOLUME="<name from railway volume list>"
+DEFIANCE_UPLOAD_DIR="$(mktemp -d)"
+test "$(shasum -a 256 data/normalized/2017.sqlite3 | awk '{print $1}')" = "$DEFIANCE_CORPUS_SHA"
+cp data/normalized/2017.sqlite3 "$DEFIANCE_UPLOAD_DIR/$DEFIANCE_CORPUS_NAME"
+chmod 0444 "$DEFIANCE_UPLOAD_DIR/$DEFIANCE_CORPUS_NAME"
+railway volume files --volume "$DEFIANCE_VOLUME" upload "$DEFIANCE_UPLOAD_DIR/$DEFIANCE_CORPUS_NAME" "/$DEFIANCE_CORPUS_NAME"
+railway volume files --volume "$DEFIANCE_VOLUME" list / --json
+railway volume files --volume "$DEFIANCE_VOLUME" download "/$DEFIANCE_CORPUS_NAME" "$DEFIANCE_UPLOAD_DIR/downloaded-$DEFIANCE_CORPUS_NAME"
+test "$(shasum -a 256 "$DEFIANCE_UPLOAD_DIR/downloaded-$DEFIANCE_CORPUS_NAME" | awk '{print $1}')" = "$DEFIANCE_CORPUS_SHA"
+```
+
+Set exactly these application/build variables. `PORT` and
+`RAILWAY_VOLUME_MOUNT_PATH=/data` are injected by Railway; do not set either
+manually. Flask debug mode must remain unset, and no Flask secret, LLM key, or
+model-provider credential exists for V1.
+
+```bash
+railway variable set --service defiance --skip-deploys \
+  RAILPACK_PYTHON_VERSION=3.12 \
+  DEFIANCE_CORPUS_DATABASE="/data/$DEFIANCE_CORPUS_NAME" \
+  DEFIANCE_CORPUS_SHA256="$DEFIANCE_CORPUS_SHA" \
+  DEFIANCE_AUDIT_DATABASE=/data/audit.sqlite3
+railway variable list --service defiance --kv
+```
+
+After the deployment commit is on `main`, connect the private GitHub repository.
+In the service settings, confirm `main` as the deploy trigger and enable **Wait
+for CI** so a failed existing GitHub workflow skips deployment. Review Railway's
+staged configuration, deploy it, and generate the Railway HTTPS domain:
+
+```bash
+railway service source connect --repo dan-sheehan/defiance --branch main --service defiance
+railway service logs --service defiance --deployment --latest
+railway domain --service defiance
+```
+
+The first successful startup creates only `/data/audit.sqlite3`; the corpus
+artifact is never copied into the image and its bytes are never modified.
+Confirm the startup log contains the pinned hash and no private filesystem path,
+then run the release validation below.
+
+### Logs, privacy, and cost
+
+Application audit data is the private SQLite content described above. Gunicorn
+access logging is explicitly sent to `/dev/null`, so Defiance does not duplicate
+request IP addresses, user agents, or request lines in process logs. Process
+stdout/stderr contains only Gunicorn lifecycle/errors and the safe preflight
+result; it must not contain questions or database paths.
+
+Railway's infrastructure HTTP logs are separate from both stores and expose
+provider fields for source IP and client user agent. Railway documents seven-day
+log retention for Hobby. This metadata is an accepted hosting limitation; this
+deployment does not claim it can be disabled and does not add a log drain,
+analytics vendor, or second copy.
+
+The expected low-traffic bill is approximately the $5/month Hobby minimum,
+which includes the first $5 of usage. Railway currently lists memory at
+$10/GB-month, CPU at $20/vCPU-month, volume storage at $0.15/GB-month, and
+service egress at $0.05/GB. The roughly 4 MB corpus plus a small audit database
+has negligible storage cost. Sustained traffic, memory/CPU time, audit growth,
+egress, or extra services/environments can increase the bill. This deployment
+does not enable Railway's agent; Defiance itself makes no model call and creates
+no usage-based LLM charge. Review Railway usage after the first week and set a
+workspace spending limit if desired.
+
+### Private audit export
+
+Never download the live writable `/audit.sqlite3` file directly while the
+service is accepting requests. Instead, use SQLite's backup API over Railway SSH
+to create a transactionally consistent, mode-`0600` snapshot on the private
+volume, download that snapshot with `railway volume files`, verify it, and then
+delete the remote snapshot:
+
+```bash
+DEFIANCE_VOLUME="<name from railway volume list>"
+DEFIANCE_AUDIT_EXPORT_DIR="$(mktemp -d)"
+railway ssh --service defiance -- python -c 'from pathlib import Path; import os, sqlite3; snapshot = Path("/data/audit-export.sqlite3"); snapshot.unlink(missing_ok=True); source = sqlite3.connect("file:/data/audit.sqlite3?mode=ro", uri=True); target = sqlite3.connect(snapshot); source.backup(target); target.close(); source.close(); os.chmod(snapshot, 0o600)'
+railway volume files --volume "$DEFIANCE_VOLUME" download /audit-export.sqlite3 "$DEFIANCE_AUDIT_EXPORT_DIR/audit.sqlite3"
+chmod 0600 "$DEFIANCE_AUDIT_EXPORT_DIR/audit.sqlite3"
+uv run --no-sync python -c 'import sqlite3, sys; connection = sqlite3.connect(sys.argv[1]); print(connection.execute("PRAGMA integrity_check").fetchone()[0]); print(connection.execute("SELECT COUNT(*) FROM ask_requests").fetchone()[0]); connection.close()' "$DEFIANCE_AUDIT_EXPORT_DIR/audit.sqlite3"
+railway volume files --volume "$DEFIANCE_VOLUME" delete /audit-export.sqlite3
+```
+
+The integrity result must be `ok`. Keep the downloaded snapshot private. The
+application and Railway operator are the only intended readers/writers; there is
+no public route, static link, TCP proxy, or admin interface for either database.
+
+### Rollback
+
+For an application regression, select the last known-good Railway deployment
+and redeploy it, or revert the bad Git commit on `main`. Leave the volume and
+audit database attached. A failed startup or `/healthz` check is marked failed;
+restore the last known-good variables/deployment and inspect only the generic
+preflight category before retrying.
+
+Corpus artifacts are immutable and hash-versioned. Never overwrite or delete
+the active artifact during a rollback. To restore a previous approved corpus,
+upload that validated artifact under its own hash name, deploy the matching
+application revision whose pinned hash agrees, and change the corpus path and
+hash variables together. The audit database is not rolled back with application
+code. No custom release service is required.
+
+### Post-deploy release validation
+
+Set `DEFIANCE_URL` to the generated `https://...up.railway.app` origin. Verify
+the transport first:
+
+```bash
+curl --fail-with-body --silent --show-error "$DEFIANCE_URL/healthz"
+curl --fail-with-body --silent --show-error "$DEFIANCE_URL/" >/dev/null
+```
+
+`/healthz` must return HTTP 200 with `{"status":"ok"}`, and the homepage must
+load its packaged CSS and JavaScript over HTTPS without a debug page. In a fresh
+browser session, submit this exact matrix and record every returned request ID:
+
+| Check | Exact question | Expected result |
+| --- | --- | --- |
+| Full-name quick hitter | `Danny Sheehan` | answered; 1–5 deterministic bullets, including Air Force road series and a 4-for-5 game |
+| Season hitter | `How many home runs did Danny Sheehan hit in 2017?` | answered; 7 home runs |
+| Season pitcher | `How many strikeouts did Brett Seeburger have in 2017?` | answered; 69 strikeouts |
+| Opponent aggregation | `What did Danny Sheehan hit against UNLV in 2017?` | answered; 9-for-25, .360, six games |
+| Series query | `What did Danny Sheehan hit in the road series at UNLV?` | answered; 5-for-13, .385, four RBI |
+| Tournament query | `What was SDSU's record in the Mountain West Tournament?` | answered; 3-1 |
+| Narrative query | `What did the recap say about Danny Sheehan in the June 3 UCLA game?` | answered; hit by pitch and winning run |
+| Ambiguous name | `What were Brown's 2017 stats?` | `ambiguous_entity`; names Andrew Brown and Tre Brown, with no partial fact |
+| Unavailable data | `How many hits did Danny Sheehan have against Fresno State?` | `unavailable`; explains the missing box score, with no partial aggregate |
+| Unsupported question | `What was SDSU's batting average with runners in scoring position?` | `unsupported` |
+| Off-topic question | `What was the weather in San Diego?` | `off_topic` |
+
+For every answered result, verify at least one evidence link is rendered, uses
+HTTPS, and targets only `goaztecs.com` or
+`sandiegost_ftp.sidearmsports.com`. From the `Danny Sheehan` quick hitter, click
+the rendered `What was Danny Sheehan's best series?` suggestion and verify the
+new independent response identifies the Air Force road series. Then submit the
+second independent question `What was SDSU's conference record?` and verify
+20-10; neither response may depend on earlier text.
+
+Create and download a consistent audit snapshot using the procedure above.
+Verify that all recorded request IDs and exact questions appear once in
+`ask_requests` with their expected status/intent, answered requests have their
+evidence rows in `ask_evidence`, and the schema has no IP-address, user-agent,
+cookie, account, or cross-request identity column.
+
+Finally download the active corpus again and confirm both immutability and the
+absence of SQLite write sidecars:
+
+```bash
+DEFIANCE_CORPUS_SHA=295f6fb5325f8b82be2d8a12d2ae7106f70560824aca4394c483850d9b6c3245
+DEFIANCE_CORPUS_NAME="2017-${DEFIANCE_CORPUS_SHA}.sqlite3"
+DEFIANCE_VOLUME="<name from railway volume list>"
+DEFIANCE_VERIFY_DIR="$(mktemp -d)"
+railway volume files --volume "$DEFIANCE_VOLUME" download "/$DEFIANCE_CORPUS_NAME" "$DEFIANCE_VERIFY_DIR/$DEFIANCE_CORPUS_NAME"
+test "$(shasum -a 256 "$DEFIANCE_VERIFY_DIR/$DEFIANCE_CORPUS_NAME" | awk '{print $1}')" = "$DEFIANCE_CORPUS_SHA"
+railway volume files --volume "$DEFIANCE_VOLUME" list /
+```
+
+The volume listing must not contain a `-journal`, `-wal`, or `-shm` file for the
+corpus. It may contain transient SQLite files for the separate writable audit
+database while requests are active.
+
 ## Commands
 
 The repository uses Python 3.12 and [`uv`](https://docs.astral.sh/uv/). Use the
