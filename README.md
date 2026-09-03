@@ -66,11 +66,50 @@ FTS syntax. Each call is independent and has no conversation memory.
 The supported V1 patterns cover season, single-game, opponent, and series
 player statistics; hitter best series; team leaders and record splits; game,
 series, and tournament results; and scoped game, series, tournament, player,
-and staff narrative questions. Results contain source URLs and locators. An
+and staff narrative questions. Entering an exact rostered full name returns up
+to five deterministic, source-backed quick hitters; sparse records return fewer
+rather than filler. Staff results label season and postseason facts as 2017 team
+context unless an SDSU source explicitly attributes an accomplishment to that
+person. Results contain source URLs and locators. An
 unknown or ambiguous entity, incomplete aggregate, unsupported question, or
 narrative question without a supporting passage returns an explicit failure
 state instead of a guessed or partial answer. There is no fuzzy matching, model
 provider, generated SQL, embedding index, or conversational fallback.
+
+## Mobile web application
+
+The Flask application in `defiance.web` is a thin WSGI interface over
+`answer_question(database_path, question)`. It provides `GET /`, JSON
+`POST /api/ask`, and `GET /healthz`. The browser uses small packaged CSS and
+vanilla JavaScript assets with no frontend build step. Each accepted request is
+independent; the application has no login, cookies, conversation transcript, or
+cross-request user identity.
+
+By default the server reads `data/normalized/2017.sqlite3` and writes anonymous
+request audits to `data/runtime/audit.sqlite3`. Override those paths with
+`DEFIANCE_CORPUS_DATABASE` and `DEFIANCE_AUDIT_DATABASE`. They must resolve to
+different files. The corpus is opened read-only throughout the answer and
+health paths; only the runtime audit database is writable.
+
+Run the local development server after building the validated corpus:
+
+```bash
+PYTHONPATH=src uv run --no-sync flask --app 'defiance.web:create_app()' run
+```
+
+`POST /api/ask` accepts exactly one JSON string field named `question`. Engine
+statuses remain HTTP 200 results with `request_id`, `status`, exact `text`,
+public evidence links, and validated suggestions. Transport validation and
+service failures use explicit 4xx or 5xx error objects. Public evidence contains
+only its display label and approved original SDSU HTTPS URL; source IDs,
+locators, raw paths, failure internals, and database paths remain server-side.
+
+For each accepted request, the separate audit database records a random request
+ID, UTC timestamp, exact submitted question, engine status and intent, exact
+answer text, failure reason when applicable, elapsed processing time, and the
+stable evidence source IDs, locators, and original SDSU URLs. It does not record
+accounts, IP addresses, user agents, cookies, conversational state, or any other
+cross-request identity.
 
 ## Commands
 

@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="Ask source-backed questions about the 2017 San Diego State baseball season."
+    >
+    <title>Defiance — 2017 SDSU Baseball</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+    <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="masthead">
+        <p class="season-mark">2017 · SDSU BASEBALL</p>
+        <h1>Defiance</h1>
+        <p class="intro">
+          Ask about players, games, series, stats, and moments from San Diego
+          State's 2017 baseball archive.
+        </p>
+        <p class="boundary">2017 season <span aria-hidden="true">·</span> SDSU sources only</p>
+      </header>
+
+      <section class="ask-panel" aria-labelledby="ask-heading">
+        <h2 id="ask-heading">What do you remember?</h2>
+        <form id="ask-form" novalidate>
+          <label for="question">Start with your full name, or ask a question</label>
+          <div class="ask-row">
+            <input
+              id="question"
+              name="question"
+              type="text"
+              maxlength="{{ max_question_characters }}"
+              autocomplete="off"
+              enterkeyhint="send"
+              required
+            >
+            <button id="submit-question" class="primary-button" type="submit">
+              Ask Defiance
+            </button>
+          </div>
+          <p id="input-help" class="input-help">
+            Each question stands alone. Include the player, opponent, game, or
+            series every time.
+          </p>
+        </form>
+
+        <div class="examples" aria-labelledby="examples-heading">
+          <h3 id="examples-heading">Try one</h3>
+          <div class="question-list">
+            <button type="button" data-question="Danny Sheehan">Danny Sheehan</button>
+            <button type="button" data-question="What happened in the Mountain West Tournament?">
+              What happened in the Mountain West Tournament?
+            </button>
+            <button type="button" data-question="What did Danny Sheehan hit in the road series at UNLV?">
+              What did Danny Sheehan hit in the road series at UNLV?
+            </button>
+            <button type="button" data-question="Who led San Diego State in home runs in 2017?">
+              Who led San Diego State in home runs in 2017?
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <div id="loading" class="loading" role="status" aria-live="polite" hidden>
+        <span class="spinner" aria-hidden="true"></span>
+        Looking through the 2017 SDSU archive…
+      </div>
+
+      <section id="result" class="result" aria-live="polite" hidden>
+        <p class="result-label">Defiance says</p>
+        <h2 id="result-heading" tabindex="-1">Answer</h2>
+        <p id="answer-text" class="answer-text"></p>
+        <div id="source-list"></div>
+        <div id="suggestion-list"></div>
+        <button id="ask-another" class="secondary-button" type="button">
+          Ask another question
+        </button>
+      </section>
+    </main>
+  </body>
+</html>

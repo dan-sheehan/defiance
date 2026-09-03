@@ -204,7 +204,9 @@ def load_question_catalog(database_path: Path) -> dict[str, object]:
     try:
         players = connection.execute(
             """
-            SELECT player.player_id, player.full_name, player.position,
+            SELECT player.player_id, player.jersey_number, player.full_name,
+                   player.position, player.height, player.weight,
+                   player.class_year, player.hometown, player.high_school,
                    player.source_id, player.source_locator,
                    source.original_url, source.raw_path
             FROM players AS player
@@ -388,6 +390,54 @@ def query_player_game(
             "game": dict(game),
             "batting": dict(batting) if batting else None,
             "pitching": dict(pitching) if pitching else None,
+        }
+    finally:
+        connection.close()
+
+
+def query_player_highlight_games(
+    database_path: Path,
+    player_id: str,
+) -> dict[str, list[dict[str, object]]]:
+    """Return every exact game line available for deterministic highlights."""
+    connection = _read_connection(database_path)
+    try:
+        _require_value(
+            connection,
+            table="players",
+            column="player_id",
+            value=player_id,
+            label="player ID",
+        )
+        batting = connection.execute(
+            """
+            SELECT line.*, game.schedule_order, game.game_date, game.opponent,
+                   game.sdsu_score, game.opponent_score,
+                   source.original_url, source.raw_path
+            FROM game_batting AS line
+            JOIN games AS game ON game.game_id = line.game_id
+            JOIN sources AS source ON source.source_id = line.source_id
+            WHERE line.player_id = ?
+            ORDER BY game.schedule_order
+            """,
+            (player_id,),
+        ).fetchall()
+        pitching = connection.execute(
+            """
+            SELECT line.*, game.schedule_order, game.game_date, game.opponent,
+                   game.sdsu_score, game.opponent_score,
+                   source.original_url, source.raw_path
+            FROM game_pitching AS line
+            JOIN games AS game ON game.game_id = line.game_id
+            JOIN sources AS source ON source.source_id = line.source_id
+            WHERE line.player_id = ?
+            ORDER BY game.schedule_order
+            """,
+            (player_id,),
+        ).fetchall()
+        return {
+            "batting": [dict(row) for row in batting],
+            "pitching": [dict(row) for row in pitching],
         }
     finally:
         connection.close()
@@ -730,11 +780,7 @@ def retrieve_article_passages(
         raise QueryError("article retrieval requires at least one structured selector")
     _validate_limit(limit)
     search = _fts_query(terms)
-    if not database_path.is_file():
-        raise QueryError(f"database does not exist: {database_path}")
-
-    connection = sqlite3.connect(database_path)
-    connection.row_factory = sqlite3.Row
+    connection = _read_connection(database_path)
     try:
         if game_id is not None:
             _require_value(
@@ -958,11 +1004,7 @@ def retrieve_play_by_play_passages(
         raise QueryError("play-by-play retrieval requires a structured selector")
     _validate_limit(limit)
     search = _fts_query(terms)
-    if not database_path.is_file():
-        raise QueryError(f"database does not exist: {database_path}")
-
-    connection = sqlite3.connect(database_path)
-    connection.row_factory = sqlite3.Row
+    connection = _read_connection(database_path)
     try:
         if game_id is not None:
             _require_value(

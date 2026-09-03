@@ -17,6 +17,7 @@ from .query import (
     query_player_aggregate,
     query_player_boxed_totals,
     query_player_game,
+    query_player_highlight_games,
     query_player_season,
     query_team_leader_rows,
     retrieve_article_passages,
@@ -165,6 +166,19 @@ NARRATIVE_TOPICS = {
     "extra innings": ("extra innings", "13 innings"),
     "100th win": ("100th win", "100 victories"),
 }
+
+QUICK_HITTER_TOPICS = (
+    "championship",
+    "award",
+    "walk off",
+    "winning run",
+    "home run",
+    "save",
+    "catch",
+    "extra innings",
+    "triple",
+    "double",
+)
 
 BASEBALL_TERMS = frozenset(
     {
@@ -1041,6 +1055,24 @@ def _excerpt(text: str, sentences: int) -> str:
     )
     parts = re.split(r"(?<=[.!?])\s+(?=[A-Z])", protected)
     return " ".join(parts[:sentences]).replace("<DOT>", ".").strip()
+
+
+def _sentence_with_name(text: str, name: str) -> tuple[int, str] | None:
+    cleaned = _strip_dateline(" ".join(text.split()))
+    protected = re.sub(
+        r"\b(?:Calif|Nev|N\.M|N\.C|Ariz|Jr|Sr|No|[A-Z])\.",
+        lambda match: match.group(0).replace(".", "<DOT>"),
+        cleaned,
+    )
+    sentences = re.split(r"(?<=[.!?])\s+(?=[A-Z])", protected)
+    full_name = _normalize(name)
+    surname = _normalize(name.rsplit(" ", 1)[-1])
+    for index, sentence in enumerate(sentences):
+        restored = sentence.replace("<DOT>", ".").strip()
+        normalized = _normalize(restored)
+        if _contains(normalized, full_name) or _contains(normalized, surname):
+            return index, restored
+    return None
 
 
 SEASON_TO_GAME_BATCH = {
@@ -2077,6 +2109,341 @@ def _person_narrative_answer(
     )
 
 
+def _exact_full_name_person(
+    question: str,
+    catalog: _Catalog,
+) -> tuple[str, str, dict[str, object]] | None:
+    for kind, people in (("player", catalog.players), ("staff", catalog.staff)):
+        for person_id, person in people.items():
+            if question == _normalize(str(person["full_name"])):
+                return kind, person_id, person
+    return None
+
+
+def _looks_like_full_name_entry(question: str) -> bool:
+    return bool(re.fullmatch(r"[a-z]+(?: [a-z]+){1,4}", question))
+
+
+def _notable_player_passage(
+    database_path: Path,
+    player_id: str,
+    name: str,
+) -> tuple[dict[str, object], str] | None:
+    candidates: list[tuple[int, str, int, int, dict[str, object], str]] = []
+    for row in retrieve_article_passages(
+        database_path, player_id=player_id, limit=100
+    ):
+        if row["block_type"] != "narrative" or str(row["text"]).count("|") >= 2:
+            continue
+        matched = _sentence_with_name(str(row["text"]), name)
+        if matched is None:
+            continue
+        sentence_index, sentence = matched
+        if any(marker in sentence for marker in ("Ã", "â")):
+            continue
+        normalized = _normalize(sentence)
+        score = sum(_contains(normalized, topic) for topic in QUICK_HITTER_TOPICS)
+        if score:
+            candidates.append(
+                (
+                    -score,
+                    str(row["source_id"]),
+                    int(row["passage_order"]),
+                    sentence_index,
+                    row,
+                    sentence,
+                )
+            )
+    if not candidates:
+        return None
+    selected = min(candidates)
+    return selected[4], selected[5]
+
+
+def _ranked_game(
+    rows: list[dict[str, object]],
+    *,
+    discipline: str,
+    secondary: bool = False,
+) -> dict[str, object] | None:
+    if discipline == "batting":
+        eligible = [
+            row
+            for row in rows
+            if any(int(row[column]) > 0 for column in ("r", "h", "rbi"))
+        ]
+        if secondary:
+            eligible = [row for row in eligible if int(row["rbi"]) > 0]
+            key = lambda row: (
+                -int(row["rbi"]),
+                -int(row["h"]),
+                -int(row["r"]),
+                int(row["schedule_order"]),
+                str(row["game_id"]),
+            )
+        else:
+            key = lambda row: (
+                -int(row["h"]),
+                -int(row["rbi"]),
+                -int(row["r"]),
+                -int(row["ab"]),
+                int(row["schedule_order"]),
+                str(row["game_id"]),
+            )
+    else:
+        eligible = [
+            row
+            for row in rows
+            if any(int(row[column]) > 0 for column in ("outs", "h", "r", "er", "so"))
+        ]
+        if secondary:
+            key = lambda row: (
+                -int(row["outs"]),
+                -int(row["so"]),
+                int(row["er"]),
+                int(row["schedule_order"]),
+                str(row["game_id"]),
+            )
+        else:
+            key = lambda row: (
+                -int(row["so"]),
+                -int(row["outs"]),
+                int(row["er"]),
+                int(row["schedule_order"]),
+                str(row["game_id"]),
+            )
+    return min(eligible, key=key) if eligible else None
+
+
+def _player_quick_hitters(
+    database_path: Path,
+    original_question: str,
+    player_id: str,
+    player: dict[str, object],
+    catalog: _Catalog,
+) -> AnswerResult:
+    name = str(player["full_name"])
+    candidates: list[tuple[str, str, tuple[EvidenceReference, ...]]] = []
+
+    passage_match = _notable_player_passage(database_path, player_id, name)
+    if passage_match is not None:
+        passage, excerpt = passage_match
+        reference = _evidence(passage, "SDSU article")
+        if excerpt and reference is not None:
+            candidates.append(
+                (
+                    f"narrative:{passage['source_id']}:{passage['passage_order']}",
+                    f"SDSU's archive says: {excerpt}",
+                    (reference,),
+                )
+            )
+
+    season = query_player_season(database_path, player_id)
+    season_batting = season["batting"]
+    useful_batting = season_batting is not None and any(
+        int(season_batting[column]) > 0
+        for column in ("hits", "runs", "runs_batted_in")
+    )
+    if season_batting is not None and int(season_batting["hits"]) > 0:
+        best_series = _best_series_answer(database_path, original_question, player_id)
+        if best_series.status == "answered":
+            candidates.append(
+                ("best-series", best_series.text, best_series.evidence)
+            )
+
+    game_lines = query_player_highlight_games(database_path, player_id)
+    ranked_rows = (
+        ("batting-game", _ranked_game(game_lines["batting"], discipline="batting")),
+        ("pitching-game", _ranked_game(game_lines["pitching"], discipline="pitching")),
+        (
+            "batting-rbi-game",
+            _ranked_game(game_lines["batting"], discipline="batting", secondary=True),
+        ),
+        (
+            "pitching-longest-game",
+            _ranked_game(game_lines["pitching"], discipline="pitching", secondary=True),
+        ),
+    )
+    game_by_id = {str(game["game_id"]): game for game in catalog.games}
+    for kind, row in ranked_rows:
+        if row is None:
+            continue
+        game_id = str(row["game_id"])
+        game = game_by_id[game_id]
+        summary = _game_answer(
+            database_path,
+            original_question,
+            "how did the player hit"
+            if kind.startswith("batting")
+            else "how did the player pitch",
+            player_id,
+            game,
+        )
+        if summary.status == "answered":
+            candidates.append((f"game:{game_id}", summary.text, summary.evidence))
+
+    selected: list[tuple[str, tuple[EvidenceReference, ...]]] = []
+    seen_keys: set[str] = set()
+    seen_text: set[str] = set()
+    for key, text, evidence in candidates:
+        normalized_text = _normalize(text)
+        if key in seen_keys or normalized_text in seen_text:
+            continue
+        seen_keys.add(key)
+        seen_text.add(normalized_text)
+        selected.append((text, evidence))
+        if len(selected) == 5:
+            break
+
+    if len(selected) < 3:
+        season_question = "what were the player stats"
+        if season["pitching"] is not None and not useful_batting:
+            season_question = "what were the player pitching stats"
+        elif season_batting is not None and season["pitching"] is None:
+            season_question = "what were the player batting stats"
+        season_answer = _season_answer(
+            database_path,
+            original_question,
+            season_question,
+            player_id,
+        )
+        normalized_text = _normalize(season_answer.text)
+        if season_answer.status == "answered" and normalized_text not in seen_text:
+            selected.append((season_answer.text, season_answer.evidence))
+            seen_text.add(normalized_text)
+
+    if not game_lines["batting"] and not game_lines["pitching"]:
+        roster_text = (
+            f"SDSU's 2017 roster listed {name} as No. {player['jersey_number']}, "
+            f"{player['position']}, {player['class_year']}, "
+            f"from {str(player['hometown']).rstrip('.')}."
+        )
+        normalized_text = _normalize(roster_text)
+        reference = _evidence(player, "2017 SDSU roster")
+        if normalized_text not in seen_text and reference is not None:
+            selected.insert(0, (roster_text, (reference,)))
+
+    evidence = [reference for _, references in selected for reference in references]
+    lines = "\n".join(f"- {text}" for text, _ in selected[:5])
+    suggestions = [
+        f"What were {name}'s pitching stats in 2017?"
+        if season["pitching"] is not None and not useful_batting
+        else f"What were {name}'s 2017 stats?"
+    ]
+    if season_batting is not None and int(season_batting["hits"]) > 0:
+        suggestions.append(f"What was {name}'s best series?")
+    return _answered(
+        original_question,
+        "player_quick_hitters",
+        f"A few things from {name}'s 2017 season:\n{lines}",
+        evidence,
+        suggestions=tuple(suggestions),
+    )
+
+
+def _staff_quick_hitters(
+    database_path: Path,
+    original_question: str,
+    staff: dict[str, object],
+    catalog: _Catalog,
+) -> AnswerResult:
+    name = str(staff["full_name"])
+    records = {
+        str(record["label"]).casefold(): record for record in catalog.records.values()
+    }
+    overall = records.get("overall")
+    conference = records.get("conference")
+    mountain_west = catalog.groups.get("event-2017-mountain-west-tournament")
+    ncaa = catalog.groups.get("event-2017-ncaa-tournament")
+
+    bullets: list[tuple[str, tuple[EvidenceReference | None, ...]]] = []
+    if overall is not None and conference is not None:
+        bullets.append(
+            (
+                "The 2017 team finished "
+                f"{overall['wins']}-{overall['losses']} overall and "
+                f"{conference['wins']}-{conference['losses']} in conference play.",
+                (
+                    _evidence(overall, "2017 SDSU season statistics"),
+                    _evidence(conference, "2017 SDSU conference statistics"),
+                ),
+            )
+        )
+    elif overall is not None:
+        bullets.append(
+            (
+                f"The 2017 team finished {overall['wins']}-{overall['losses']} overall.",
+                (_evidence(overall, "2017 SDSU season statistics"),),
+            )
+        )
+
+    if mountain_west is not None:
+        mountain_west_games = catalog.group_games.get(
+            str(mountain_west["group_id"]), ()
+        )
+        mountain_west_final = mountain_west_games[-1] if mountain_west_games else None
+        mountain_west_recap = (
+            _first_game_recap(database_path, str(mountain_west_final["game_id"]))
+            if mountain_west_final is not None
+            else None
+        )
+        bullets.append(
+            (
+                "The 2017 team went "
+                f"{mountain_west['sdsu_wins']}-{mountain_west['sdsu_losses']} in the "
+                "Mountain West Tournament and won the championship.",
+                (
+                    _evidence(mountain_west, "Mountain West Tournament"),
+                    _evidence(mountain_west_final, "Mountain West championship game")
+                    if mountain_west_final
+                    else None,
+                    _evidence(mountain_west_recap, "SDSU championship recap")
+                    if mountain_west_recap
+                    else None,
+                ),
+            )
+        )
+
+    if ncaa is not None:
+        ncaa_games = catalog.group_games.get(str(ncaa["group_id"]), ())
+        ucla = next((game for game in ncaa_games if game["opponent"] == "UCLA"), None)
+        ucla_recap = (
+            _first_game_recap(database_path, str(ucla["game_id"]))
+            if ucla is not None
+            else None
+        )
+        ncaa_text = (
+            "The 2017 team went "
+            f"{ncaa['sdsu_wins']}-{ncaa['sdsu_losses']} in the NCAA Tournament"
+        )
+        if ucla is not None:
+            ncaa_text += ", including a 3-2, 13-inning win over UCLA"
+        bullets.append(
+            (
+                f"{ncaa_text}.",
+                (
+                    _evidence(ncaa, "NCAA Tournament"),
+                    _evidence(ucla, "2017-06-03 UCLA result") if ucla else None,
+                    _evidence(ucla_recap, "SDSU UCLA recap") if ucla_recap else None,
+                ),
+            )
+        )
+    evidence: list[EvidenceReference | None] = [_evidence(staff, "2017 SDSU staff")]
+    for _, references in bullets:
+        evidence.extend(references)
+    lines = "\n".join(f"- {text}" for text, _ in bullets)
+    return _answered(
+        original_question,
+        "staff_quick_hitters",
+        f"2017 team context for {name}:\n{lines}",
+        evidence,
+        suggestions=(
+            "What happened in the Mountain West Tournament?",
+            "What was San Diego State's record in 2017?",
+        ),
+    )
+
+
 def _validated_suggestions(
     database_path: Path,
     result: AnswerResult,
@@ -2196,6 +2563,27 @@ def _answer_question(
     event_id = _event(original_question, matches)
     if isinstance(event_id, AnswerResult):
         return _validated_suggestions(database_path, event_id) if include_suggestions else event_id
+
+    full_name_person = _exact_full_name_person(question, catalog)
+    if full_name_person is not None:
+        kind, person_id, person = full_name_person
+        result = (
+            _player_quick_hitters(
+                database_path,
+                original_question,
+                person_id,
+                person,
+                catalog,
+            )
+            if kind == "player"
+            else _staff_quick_hitters(
+                database_path,
+                original_question,
+                person,
+                catalog,
+            )
+        )
+        return _validated_suggestions(database_path, result) if include_suggestions else result
 
     if any(_contains(question, phrase) for phrase in ("that game", "that series", "what about", "how about")):
         result = _failure(
@@ -2402,6 +2790,18 @@ def _answer_question(
                 )
             else:
                 result = _season_answer(database_path, original_question, question, player_id)
+    elif _looks_like_full_name_entry(question):
+        result = _failure(
+            original_question,
+            "unknown_entity",
+            None,
+            "I couldn't find that full name on the 2017 San Diego State roster or staff list.",
+            f"unknown_person:{question}",
+            suggestions=(
+                "Danny Sheehan",
+                "Mark Martinez",
+            ),
+        )
     else:
         baseball = any(_contains(question, term) for term in BASEBALL_TERMS)
         if baseball:

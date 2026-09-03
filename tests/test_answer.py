@@ -137,6 +137,51 @@ class DeterministicRouterUnitTest(unittest.TestCase):
         with sqlite3.connect(f"file:{self.database}?mode=ro", uri=True) as connection:
             self.assertEqual(connection.execute("SELECT COUNT(*) FROM players").fetchone()[0], 3)
 
+    def test_exact_full_names_route_to_quick_hitter_boundaries(self) -> None:
+        player_result = AnswerResult(
+            question="Danny Sheehan",
+            status="answered",
+            intent="player_quick_hitters",
+            text="A source-backed player memory.",
+            evidence=(
+                answer.EvidenceReference(
+                    label="Roster",
+                    source_id="source",
+                    original_url="https://example.test/source",
+                    source_locator="roster",
+                    raw_path="raw/source.html",
+                ),
+            ),
+        )
+        staff_result = AnswerResult(
+            question="Mark Martinez",
+            status="answered",
+            intent="staff_quick_hitters",
+            text="2017 team context.",
+            evidence=player_result.evidence,
+        )
+        with (
+            patch.object(answer, "_player_quick_hitters", return_value=player_result) as player,
+            patch.object(answer, "_staff_quick_hitters", return_value=staff_result) as staff,
+        ):
+            self.assertEqual(
+                answer_question(self.database, "Danny Sheehan").intent,
+                "player_quick_hitters",
+            )
+            self.assertEqual(
+                answer_question(self.database, "Mark Martinez").intent,
+                "staff_quick_hitters",
+            )
+
+        player.assert_called_once()
+        staff.assert_called_once()
+
+    def test_unrecognized_full_name_entry_is_an_unknown_entity(self) -> None:
+        result = answer_question(self.database, "John Smith")
+
+        self.assertEqual(result.status, "unknown_entity")
+        self.assertEqual(result.failure_reason, "unknown_person:john smith")
+
 
 class AnswerCliTest(unittest.TestCase):
     def test_ask_uses_the_product_answer_boundary(self) -> None:
@@ -454,6 +499,77 @@ class FullCorpusAnswerAcceptanceTest(unittest.TestCase):
         self.assertNotIn("lost to UNLV", ambiguous.text)
         self.assertNotIn("-for-", unavailable.text)
         self.assertNotIn(" hits against", unavailable.text)
+
+    def test_full_name_quick_hitters_cover_every_rostered_person(self) -> None:
+        with sqlite3.connect(f"file:{self.database}?mode=ro", uri=True) as connection:
+            people = connection.execute(
+                """
+                SELECT full_name, 'player' AS kind FROM players
+                UNION ALL
+                SELECT full_name, 'staff' AS kind FROM staff
+                ORDER BY full_name
+                """
+            ).fetchall()
+
+        for full_name, kind in people:
+            with self.subTest(full_name=full_name):
+                result = answer_question(self.database, full_name)
+                self.assertEqual(result.status, "answered")
+                self.assertEqual(result.intent, f"{kind}_quick_hitters")
+                self.assertTrue(result.evidence)
+                bullets = [
+                    line for line in result.text.splitlines() if line.startswith("- ")
+                ]
+                bullet_count = len(bullets)
+                self.assertGreaterEqual(bullet_count, 1)
+                self.assertLessEqual(bullet_count, 5)
+                self.assertEqual(len(bullets), len(set(bullets)))
+                self.assertNotIn("best series batting average was .000", result.text)
+                self.assertNotIn("Ã", result.text)
+                self.assertNotIn("â", result.text)
+                if kind == "staff":
+                    self.assertTrue(
+                        result.text.startswith(f"2017 team context for {full_name}:")
+                    )
+                    self.assertTrue(
+                        all(bullet.startswith("- The 2017 team") for bullet in bullets)
+                    )
+
+    def test_representative_quick_hitters_are_useful_and_source_backed(self) -> None:
+        cases = {
+            "Danny Sheehan": ("Air Force road series", "4-for-5"),
+            "Brett Seeburger": ("8.0 innings", "10 strikeouts"),
+            "Alan Trejo": ("4-for-6", "pitched 2.2 innings"),
+            "Tre Brown": ("1.0 innings", "2 appearances"),
+            "Elijah Greene": ("2017 roster", "do not list a batting or pitching line"),
+        }
+        for full_name, fragments in cases.items():
+            with self.subTest(full_name=full_name):
+                result = answer_question(self.database, full_name)
+                self.assertEqual(result.intent, "player_quick_hitters")
+                for fragment in fragments:
+                    self.assertIn(fragment, result.text)
+                bullets = [
+                    line.removeprefix("- ")
+                    for line in result.text.splitlines()
+                    if line.startswith("- ")
+                ]
+                self.assertEqual(len(bullets), len(set(bullets)))
+
+        sally = answer_question(self.database, "CJ Saylor")
+        self.assertNotIn("best series batting average was .000", sally.text)
+        self.assertNotIn("0-for-1 with 0 runs and 0 RBI", sally.text)
+        self.assertNotIn("best series", " ".join(sally.suggestions))
+
+        wylie = answer_question(self.database, "Justin Wylie")
+        self.assertNotIn("best series batting average was .000", wylie.text)
+        self.assertNotIn("best series", " ".join(wylie.suggestions))
+
+        staff = answer_question(self.database, "Mark Martinez")
+        self.assertEqual(staff.intent, "staff_quick_hitters")
+        self.assertTrue(staff.text.startswith("2017 team context for Mark Martinez:"))
+        self.assertIn("The 2017 team finished 42-21", staff.text)
+        self.assertNotIn("Mark Martinez finished 42-21", staff.text)
 
 
 if __name__ == "__main__":
