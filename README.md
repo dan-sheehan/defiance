@@ -39,6 +39,21 @@ each group plus each ordered game membership retains SDSU provenance. Group
 records are derived and validated from the canonical game scores. Tournament
 meetings are event members and are not relabeled as regular series.
 
+Narrative relationships are built deterministically from the preserved article
+blocks. `config/2017/narrative.json` records the reviewed passage assignments for
+the three shared recaps plus explicit tournament and season-source exceptions.
+Direct series-source relationships are created only when the reviewed series
+provenance resolves to an exact preserved article passage; otherwise series
+retrieval uses its member games. Exact full names and conservative source-scoped
+surnames link article passages to rostered players, while staff links require an
+exact full name. Play-by-play stays in a separate table and search index.
+
+SQLite FTS5 indexes the 1,536 article heading/narrative blocks and all 770
+play-by-play passages. The retrieval functions in `defiance.query` require at
+least one exact structured selector (game, player, staff, opponent, group, or
+season, as applicable) before optional literal lexical terms are applied. They
+do not accept raw FTS syntax, fuzzy names, or unconstrained corpus-wide search.
+
 ## Commands
 
 The repository uses Python 3.12 and [`uv`](https://docs.astral.sh/uv/). Use the

@@ -17,6 +17,7 @@ from .corpus_parse import (
     person_key,
 )
 from .db import ValidationError
+from .narrative import NarrativeRelationships, derive_narrative_relationships
 
 
 SCHEMA = """
@@ -323,14 +324,96 @@ CREATE TABLE IF NOT EXISTS article_passages (
     passage_order INTEGER NOT NULL CHECK (passage_order > 0),
     text TEXT NOT NULL,
     source_locator TEXT NOT NULL CHECK (length(source_locator) > 0),
+    block_type TEXT NOT NULL CHECK (
+        block_type IN ('dateline', 'resource_link', 'heading', 'narrative')
+    ),
     PRIMARY KEY (source_id, passage_order)
 );
+
+CREATE TABLE IF NOT EXISTS article_passage_games (
+    source_id TEXT NOT NULL,
+    passage_order INTEGER NOT NULL,
+    game_id TEXT NOT NULL REFERENCES games(game_id) ON DELETE CASCADE,
+    relationship TEXT NOT NULL CHECK (relationship IN ('recap', 'context')),
+    PRIMARY KEY (source_id, passage_order, game_id, relationship),
+    FOREIGN KEY (source_id, passage_order)
+        REFERENCES article_passages(source_id, passage_order) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS article_passage_players (
+    source_id TEXT NOT NULL,
+    passage_order INTEGER NOT NULL,
+    player_id TEXT NOT NULL REFERENCES players(player_id) ON DELETE CASCADE,
+    match_kind TEXT NOT NULL CHECK (
+        match_kind IN ('full_name', 'source_scoped_surname')
+    ),
+    PRIMARY KEY (source_id, passage_order, player_id),
+    FOREIGN KEY (source_id, passage_order)
+        REFERENCES article_passages(source_id, passage_order) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS article_passage_staff (
+    source_id TEXT NOT NULL,
+    passage_order INTEGER NOT NULL,
+    staff_id TEXT NOT NULL REFERENCES staff(staff_id) ON DELETE CASCADE,
+    match_kind TEXT NOT NULL CHECK (match_kind = 'exact_full_name'),
+    PRIMARY KEY (source_id, passage_order, staff_id),
+    FOREIGN KEY (source_id, passage_order)
+        REFERENCES article_passages(source_id, passage_order) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS play_by_play_players (
+    game_id TEXT NOT NULL,
+    sequence INTEGER NOT NULL,
+    player_id TEXT NOT NULL REFERENCES players(player_id) ON DELETE CASCADE,
+    match_kind TEXT NOT NULL CHECK (match_kind = 'game_scoped_token'),
+    PRIMARY KEY (game_id, sequence, player_id),
+    FOREIGN KEY (game_id, sequence)
+        REFERENCES play_by_play(game_id, sequence) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS schedule_group_sources (
+    group_id TEXT NOT NULL REFERENCES schedule_groups(group_id) ON DELETE CASCADE,
+    source_id TEXT NOT NULL REFERENCES sources(source_id),
+    relationship TEXT NOT NULL CHECK (
+        relationship IN ('series_context', 'event_context')
+    ),
+    PRIMARY KEY (group_id, source_id, relationship)
+);
+
+CREATE TABLE IF NOT EXISTS season_narrative_sources (
+    season INTEGER NOT NULL CHECK (season = 2017),
+    source_id TEXT NOT NULL REFERENCES sources(source_id),
+    relationship TEXT NOT NULL CHECK (
+        relationship IN ('honor', 'postseason_context')
+    ),
+    PRIMARY KEY (season, source_id, relationship)
+);
+
+CREATE INDEX IF NOT EXISTS article_passage_games_game
+    ON article_passage_games(game_id, source_id, passage_order);
+CREATE INDEX IF NOT EXISTS article_passage_players_player
+    ON article_passage_players(player_id, source_id, passage_order);
+CREATE INDEX IF NOT EXISTS article_passage_staff_staff
+    ON article_passage_staff(staff_id, source_id, passage_order);
+CREATE INDEX IF NOT EXISTS play_by_play_players_player
+    ON play_by_play_players(player_id, game_id, sequence);
+CREATE INDEX IF NOT EXISTS schedule_group_sources_group
+    ON schedule_group_sources(group_id, source_id);
+CREATE INDEX IF NOT EXISTS season_narrative_sources_season
+    ON season_narrative_sources(season, source_id);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS article_passages_fts
+    USING fts5(text, tokenize='unicode61');
+CREATE VIRTUAL TABLE IF NOT EXISTS play_by_play_fts
+    USING fts5(text, tokenize='unicode61');
 """
 
 
 @dataclass(frozen=True)
 class CorpusData:
     manifest: dict[str, object]
+    narrative: dict[str, object]
     players: tuple[RosterPlayer, ...]
     staff: tuple[StaffMember, ...]
     season_statistics: ParsedSeasonStatistics
@@ -680,8 +763,16 @@ def _player_id_map(players: tuple[RosterPlayer, ...]) -> dict[str, str]:
     return {person_key(player.full_name): player.player_id for player in players}
 
 
-def _clear_tables(connection: sqlite3.Connection) -> None:
+def _recreate_schema(connection: sqlite3.Connection) -> None:
     tables = (
+        "article_passages_fts",
+        "play_by_play_fts",
+        "season_narrative_sources",
+        "schedule_group_sources",
+        "play_by_play_players",
+        "article_passage_staff",
+        "article_passage_players",
+        "article_passage_games",
         "article_passages",
         "play_by_play",
         "game_pitching",
@@ -702,8 +793,16 @@ def _clear_tables(connection: sqlite3.Connection) -> None:
         "source_gaps",
         "sources",
     )
-    for table in tables:
-        connection.execute(f"DELETE FROM {table}")
+    drops = "\n".join(f"DROP TABLE IF EXISTS {table};" for table in tables)
+    connection.executescript(f"BEGIN IMMEDIATE;\n{drops}\n{SCHEMA}")
+
+
+def _require_fts5(connection: sqlite3.Connection) -> None:
+    try:
+        connection.execute("CREATE VIRTUAL TABLE temp.fts5_probe USING fts5(text)")
+        connection.execute("DROP TABLE temp.fts5_probe")
+    except sqlite3.OperationalError as exc:
+        raise ValidationError("SQLite FTS5 support is required for the narrative corpus") from exc
 
 
 def _insert_season_rows(
@@ -748,9 +847,9 @@ def load_corpus(database_path: Path, data: CorpusData) -> None:
     connection = sqlite3.connect(database_path)
     connection.execute("PRAGMA foreign_keys = ON")
     try:
+        _require_fts5(connection)
         with connection:
-            connection.executescript(SCHEMA)
-            _clear_tables(connection)
+            _recreate_schema(connection)
             sources = data.manifest["sources"]
             games = data.manifest["games"]
             schedule_groups = data.manifest["schedule_groups"]
@@ -1217,8 +1316,8 @@ def load_corpus(database_path: Path, data: CorpusData) -> None:
                 connection.executemany(
                     """
                     INSERT INTO article_passages(
-                        source_id, passage_order, text, source_locator
-                    ) VALUES (?, ?, ?, ?)
+                        source_id, passage_order, text, source_locator, block_type
+                    ) VALUES (?, ?, ?, ?, ?)
                     """,
                     (
                         (
@@ -1226,16 +1325,83 @@ def load_corpus(database_path: Path, data: CorpusData) -> None:
                             passage.passage_order,
                             passage.text,
                             passage.source_locator,
+                            passage.block_type,
                         )
                         for passage in passages
                     ),
                 )
-            validate_database(connection)
+
+            relationships = derive_narrative_relationships(data)
+            connection.executemany(
+                """
+                INSERT INTO article_passage_games(
+                    source_id, passage_order, game_id, relationship
+                ) VALUES (?, ?, ?, ?)
+                """,
+                relationships.article_games,
+            )
+            connection.executemany(
+                """
+                INSERT INTO article_passage_players(
+                    source_id, passage_order, player_id, match_kind
+                ) VALUES (?, ?, ?, ?)
+                """,
+                relationships.article_players,
+            )
+            connection.executemany(
+                """
+                INSERT INTO article_passage_staff(
+                    source_id, passage_order, staff_id, match_kind
+                ) VALUES (?, ?, ?, ?)
+                """,
+                relationships.article_staff,
+            )
+            connection.executemany(
+                """
+                INSERT INTO play_by_play_players(
+                    game_id, sequence, player_id, match_kind
+                ) VALUES (?, ?, ?, ?)
+                """,
+                relationships.play_by_play_players,
+            )
+            connection.executemany(
+                """
+                INSERT INTO schedule_group_sources(group_id, source_id, relationship)
+                VALUES (?, ?, ?)
+                """,
+                relationships.group_sources,
+            )
+            connection.executemany(
+                """
+                INSERT INTO season_narrative_sources(season, source_id, relationship)
+                VALUES (?, ?, ?)
+                """,
+                relationships.season_sources,
+            )
+            connection.execute(
+                """
+                INSERT INTO article_passages_fts(rowid, text)
+                SELECT rowid, text
+                FROM article_passages
+                WHERE block_type IN ('heading', 'narrative')
+                ORDER BY rowid
+                """
+            )
+            connection.execute(
+                """
+                INSERT INTO play_by_play_fts(rowid, text)
+                SELECT rowid, text FROM play_by_play ORDER BY rowid
+                """
+            )
+            validate_database(connection, relationships)
     finally:
         connection.close()
 
 
-def validate_database(connection: sqlite3.Connection) -> None:
+def validate_database(
+    connection: sqlite3.Connection,
+    expected_narrative: NarrativeRelationships | None = None,
+) -> None:
     expected_counts = {
         "sources": 248,
         "source_gaps": 24,
@@ -1261,6 +1427,82 @@ def validate_database(connection: sqlite3.Connection) -> None:
         actual = connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
         if actual != expected:
             raise ValidationError(f"{table} count mismatch: expected {expected}, got {actual}")
+    if expected_narrative is not None:
+        relationship_tables = (
+            (
+                "article_passage_games",
+                "source_id, passage_order, game_id, relationship",
+                expected_narrative.article_games,
+            ),
+            (
+                "article_passage_players",
+                "source_id, passage_order, player_id, match_kind",
+                expected_narrative.article_players,
+            ),
+            (
+                "article_passage_staff",
+                "source_id, passage_order, staff_id, match_kind",
+                expected_narrative.article_staff,
+            ),
+            (
+                "play_by_play_players",
+                "game_id, sequence, player_id, match_kind",
+                expected_narrative.play_by_play_players,
+            ),
+            (
+                "schedule_group_sources",
+                "group_id, source_id, relationship",
+                expected_narrative.group_sources,
+            ),
+            (
+                "season_narrative_sources",
+                "season, source_id, relationship",
+                expected_narrative.season_sources,
+            ),
+        )
+        for table, columns, expected_rows in relationship_tables:
+            actual_rows = tuple(
+                connection.execute(
+                    f"SELECT {columns} FROM {table} ORDER BY {columns}"
+                ).fetchall()
+            )
+            if actual_rows != expected_rows:
+                raise ValidationError(
+                    f"{table} does not match deterministic narrative relationships"
+                )
+    article_fts_count = connection.execute(
+        "SELECT COUNT(*) FROM article_passages_fts"
+    ).fetchone()[0]
+    article_body_count = connection.execute(
+        """
+        SELECT COUNT(*) FROM article_passages
+        WHERE block_type IN ('heading', 'narrative')
+        """
+    ).fetchone()[0]
+    if article_fts_count != article_body_count:
+        raise ValidationError(
+            "article FTS coverage does not match retrievable article body passages"
+        )
+    if connection.execute("SELECT COUNT(*) FROM play_by_play_fts").fetchone()[0] != 770:
+        raise ValidationError("play-by-play FTS coverage is incomplete")
+    mismatched_article_fts = connection.execute(
+        """
+        SELECT COUNT(*)
+        FROM article_passages_fts AS fts
+        JOIN article_passages AS passage ON passage.rowid = fts.rowid
+        WHERE fts.text <> passage.text
+        """
+    ).fetchone()[0]
+    mismatched_pbp_fts = connection.execute(
+        """
+        SELECT COUNT(*)
+        FROM play_by_play_fts AS fts
+        JOIN play_by_play AS passage ON passage.rowid = fts.rowid
+        WHERE fts.text <> passage.text
+        """
+    ).fetchone()[0]
+    if mismatched_article_fts or mismatched_pbp_fts:
+        raise ValidationError("FTS rows do not preserve their source passage text")
     source_statuses = dict(
         connection.execute(
             "SELECT status, COUNT(*) FROM sources GROUP BY status"
@@ -1343,6 +1585,90 @@ def validate_database(connection: sqlite3.Connection) -> None:
         raise ValidationError(
             f"{bad_group_results} schedule group results disagree with canonical games"
         )
+    bad_group_sources = connection.execute(
+        """
+        SELECT COUNT(*)
+        FROM schedule_group_sources AS link
+        JOIN schedule_groups AS groups USING (group_id)
+        WHERE (link.relationship = 'series_context' AND groups.group_type <> 'series')
+           OR (link.relationship = 'event_context' AND groups.group_type <> 'event')
+           OR (link.relationship = 'series_context' AND link.source_id <> groups.source_id)
+           OR (link.relationship = 'series_context' AND NOT EXISTS (
+                SELECT 1 FROM article_passages AS reviewed_passage
+                WHERE reviewed_passage.source_id = link.source_id
+                  AND reviewed_passage.source_locator = groups.source_locator
+           ))
+           OR NOT EXISTS (
+                SELECT 1 FROM article_passages AS passage
+                WHERE passage.source_id = link.source_id
+           )
+        """
+    ).fetchone()[0]
+    if bad_group_sources:
+        raise ValidationError(f"{bad_group_sources} narrative group sources are invalid")
+    bad_article_game_links = connection.execute(
+        """
+        SELECT COUNT(*)
+        FROM article_passage_games AS link
+        JOIN games USING (game_id)
+        JOIN sources ON sources.source_id = link.source_id
+        WHERE (link.relationship = 'recap' AND link.source_id NOT IN (
+                   SELECT source_id FROM game_sources
+                   WHERE game_id = link.game_id AND relationship = 'recap'
+               ))
+           OR (link.relationship = 'context' AND (
+                   sources.classification <> 'game_or_series_context'
+                   OR instr(link.source_id, '-news-' || games.game_date || '-') = 0
+               ))
+        """
+    ).fetchone()[0]
+    if bad_article_game_links:
+        raise ValidationError(
+            f"{bad_article_game_links} article-to-game relationships are invalid"
+        )
+    non_body_links = connection.execute(
+        """
+        SELECT COUNT(*) FROM article_passage_games AS link
+        JOIN article_passages AS passage USING (source_id, passage_order)
+        WHERE passage.block_type NOT IN ('heading', 'narrative')
+        """
+    ).fetchone()[0]
+    if non_body_links:
+        raise ValidationError("article-to-game relationships include non-body passages")
+    non_body_person_links = connection.execute(
+        """
+        SELECT COUNT(*) FROM (
+            SELECT source_id, passage_order FROM article_passage_players
+            UNION ALL
+            SELECT source_id, passage_order FROM article_passage_staff
+        ) AS link
+        JOIN article_passages AS passage USING (source_id, passage_order)
+        WHERE passage.block_type NOT IN ('heading', 'narrative')
+        """
+    ).fetchone()[0]
+    if non_body_person_links:
+        raise ValidationError("article person relationships include non-body passages")
+    missing_recap_links = connection.execute(
+        """
+        SELECT COUNT(*) FROM games
+        WHERE NOT EXISTS (
+            SELECT 1 FROM article_passage_games AS link
+            WHERE link.game_id = games.game_id AND link.relationship = 'recap'
+        )
+        """
+    ).fetchone()[0]
+    if missing_recap_links:
+        raise ValidationError(f"{missing_recap_links} games lack recap passage links")
+    bad_play_by_play_links = connection.execute(
+        """
+        SELECT COUNT(*)
+        FROM play_by_play_players AS link
+        JOIN play_by_play AS passage USING (game_id, sequence)
+        WHERE passage.batting_team <> 'San Diego State'
+        """
+    ).fetchone()[0]
+    if bad_play_by_play_links:
+        raise ValidationError("play-by-play player links include opponent batting passages")
     game_totals = connection.execute(
         """
         SELECT SUM(sdsu_score), SUM(opponent_score),

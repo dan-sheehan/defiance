@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "shared_recaps": [
+    {
+      "source_id": "sdsu-2017-02-17-pacific-recap",
+      "games": {
+        "2017-02-17-pacific": [
+          "embed-html/block[3]",
+          "embed-html/block[4]",
+          "embed-html/block[5]",
+          "embed-html/block[6]",
+          "embed-html/block[7]",
+          "embed-html/block[11]"
+        ],
+        "2017-02-18-pacific": [
+          "embed-html/block[3]",
+          "embed-html/block[4]",
+          "embed-html/block[8]",
+          "embed-html/block[9]",
+          "embed-html/block[10]",
+          "embed-html/block[11]"
+        ]
+      },
+      "excluded_body_locators": {
+        "embed-html/block[12]": "upcoming-game material is not evidence for either completed game"
+      }
+    },
+    {
+      "source_id": "sdsu-2017-news-2017-02-25-aztecs-spilt-doubleheader-at-tony-gwynn-classic",
+      "games": {
+        "2017-02-25-notre-dame": [
+          "embed-html/block[3]",
+          "embed-html/block[4]",
+          "embed-html/block[5]",
+          "embed-html/block[6]",
+          "embed-html/block[7]",
+          "embed-html/block[8]",
+          "embed-html/block[9]",
+          "embed-html/block[10]"
+        ],
+        "2017-02-25-seton-hall": [
+          "embed-html/block[3]",
+          "embed-html/block[11]",
+          "embed-html/block[12]",
+          "embed-html/block[13]",
+          "embed-html/block[14]"
+        ]
+      },
+      "excluded_body_locators": {
+        "embed-html/block[15]": "upcoming-game material is not evidence for either completed game"
+      }
+    },
+    {
+      "source_id": "sdsu-2017-news-2017-03-25-aztecs-sweep-doubleheader-at-fresno-state",
+      "games": {
+        "2017-03-25-fresno-state-1": [
+          "embed-html/block[3]",
+          "embed-html/block[4]",
+          "embed-html/block[5]",
+          "embed-html/block[6]",
+          "embed-html/block[7]",
+          "embed-html/block[8]",
+          "embed-html/block[9]",
+          "embed-html/block[17]"
+        ],
+        "2017-03-25-fresno-state-2": [
+          "embed-html/block[3]",
+          "embed-html/block[4]",
+          "embed-html/block[10]",
+          "embed-html/block[11]",
+          "embed-html/block[12]",
+          "embed-html/block[13]",
+          "embed-html/block[14]",
+          "embed-html/block[15]",
+          "embed-html/block[16]",
+          "embed-html/block[17]"
+        ]
+      },
+      "excluded_body_locators": {
+        "embed-html/block[18]": "upcoming-game material is not evidence for either completed game"
+      }
+    }
+  ],
+  "event_sources": {
+    "event-2017-tony-gwynn-legacy": [
+      "sdsu-2017-news-2017-02-23-tony-gwynn-classic-baseball-schedule-changed"
+    ],
+    "event-2017-mountain-west-tournament": [
+      "sdsu-2017-news-2017-05-24-aztecs-in-albuquerque-for-mountain-west-tournament"
+    ],
+    "event-2017-ncaa-tournament": [
+      "sdsu-2017-news-2017-05-29-aztecs-headed-to-long-beach-state-for-ncaa-regional",
+      "sdsu-2017-ncaa-central"
+    ]
+  },
+  "season_source_overrides": {
+    "sdsu-2017-news-2017-04-17-hensley-selected-mountain-west-player-of-the-week": "honor"
+  }
+}

@@ -291,6 +291,7 @@ class ArticlePassage:
     passage_order: int
     text: str
     source_locator: str
+    block_type: str
 
 
 class _TableParser(HTMLParser):
@@ -943,7 +944,10 @@ class _ArticleParser(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.embed_depth = 0
         self.current: list[str] | None = None
-        self.paragraphs: list[str] = []
+        self.current_tag: str | None = None
+        self.anchor_depth = 0
+        self.has_text_outside_anchor = False
+        self.paragraphs: list[tuple[str, str]] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         classes = set((dict(attrs).get("class") or "").split())
@@ -956,18 +960,27 @@ class _ArticleParser(HTMLParser):
             self.embed_depth += 1
         elif tag in {"p", "li", "h2", "h3"} and self.current is None:
             self.current = []
+            self.current_tag = tag
+            self.anchor_depth = 0
+            self.has_text_outside_anchor = False
+        elif tag == "a" and self.current is not None:
+            self.anchor_depth += 1
 
     def handle_endtag(self, tag: str) -> None:
         if not self.embed_depth:
             return
         if tag in {"p", "li", "h2", "h3"}:
             self._finish()
+        elif tag == "a" and self.current is not None:
+            self.anchor_depth = max(0, self.anchor_depth - 1)
         elif tag == "div":
             self.embed_depth -= 1
 
     def handle_data(self, data: str) -> None:
         if self.current is not None:
             self.current.append(data)
+            if self.anchor_depth == 0 and data.strip():
+                self.has_text_outside_anchor = True
 
     def close(self) -> None:
         super().close()
@@ -977,9 +990,30 @@ class _ArticleParser(HTMLParser):
         if self.current is None:
             return
         text = _clean("".join(self.current))
-        if text and (not self.paragraphs or self.paragraphs[-1] != text):
-            self.paragraphs.append(text)
+        if self.current_tag in {"h2", "h3"}:
+            block_type = "heading"
+        elif not self.has_text_outside_anchor or re.fullmatch(
+            r"[^.]{0,100}Box Score(?:\s*\|\s*[^.]{0,100}Box Score)*",
+            text,
+            flags=re.IGNORECASE,
+        ):
+            block_type = "resource_link"
+        elif re.fullmatch(
+            r"(?:Jan\.|January|Feb\.|February|Mar\.|March|Apr\.|April|May|"
+            r"Jun\.|June|Jul\.|July|Aug\.|August|Sep\.|September|Oct\.|October|"
+            r"Nov\.|November|Dec\.|December)"
+            r"\s+\d{1,2},\s+\d{4}",
+            text,
+        ):
+            block_type = "dateline"
+        else:
+            block_type = "narrative"
+        if text and (not self.paragraphs or self.paragraphs[-1][0] != text):
+            self.paragraphs.append((text, block_type))
         self.current = None
+        self.current_tag = None
+        self.anchor_depth = 0
+        self.has_text_outside_anchor = False
 
 
 def parse_article(content: bytes) -> tuple[ArticlePassage, ...]:
@@ -991,6 +1025,7 @@ def parse_article(content: bytes) -> tuple[ArticlePassage, ...]:
             passage_order=order,
             text=text,
             source_locator=f"embed-html/block[{order}]",
+            block_type=block_type,
         )
-        for order, text in enumerate(parser.paragraphs, start=1)
+        for order, (text, block_type) in enumerate(parser.paragraphs, start=1)
     )

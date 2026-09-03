@@ -235,6 +235,11 @@ class CorpusParserTest(unittest.TestCase):
         self.assertEqual([passage.passage_order for passage in passages], list(range(1, 9)))
         self.assertEqual(passages[0].text, "Feb. 18, 2017")
         self.assertEqual(passages[0].source_locator, "embed-html/block[1]")
+        self.assertEqual(passages[0].block_type, "dateline")
+        self.assertEqual(passages[1].block_type, "resource_link")
+        self.assertTrue(
+            all(passage.block_type == "narrative" for passage in passages[2:])
+        )
 
 
 class ScheduleGroupingTest(unittest.TestCase):
@@ -314,7 +319,7 @@ class LocalFullCorpusTest(unittest.TestCase):
             )
             self.assertEqual(len(game["batting"]), 15)
             self.assertEqual(len(game["pitching"]), 3)
-            self.assertEqual(len(game["recap_passages"]), 12)
+            self.assertEqual(len(game["recap_passages"]), 10)
             rendered = format_game(game)
             self.assertIn("Game: 2017-04-15 vs. UNLV", rendered)
             self.assertIn("Final: San Diego State 16, UNLV 3", rendered)
@@ -334,6 +339,14 @@ class LocalFullCorpusTest(unittest.TestCase):
                         "game_pitching",
                         "play_by_play",
                         "article_passages",
+                        "article_passages_fts",
+                        "play_by_play_fts",
+                        "article_passage_games",
+                        "article_passage_players",
+                        "article_passage_staff",
+                        "play_by_play_players",
+                        "schedule_group_sources",
+                        "season_narrative_sources",
                         "source_gaps",
                         "source_conflicts",
                     )
@@ -350,6 +363,14 @@ class LocalFullCorpusTest(unittest.TestCase):
                         "game_pitching": 252,
                         "play_by_play": 770,
                         "article_passages": 1758,
+                        "article_passages_fts": 1536,
+                        "play_by_play_fts": 770,
+                        "article_passage_games": 1202,
+                        "article_passage_players": 1563,
+                        "article_passage_staff": 6,
+                        "play_by_play_players": 1810,
+                        "schedule_group_sources": 18,
+                        "season_narrative_sources": 13,
                         "source_gaps": 24,
                         "source_conflicts": 5,
                     },

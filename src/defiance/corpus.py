@@ -16,6 +16,7 @@ from .corpus_parse import (
     parse_season_statistics,
 )
 from .db import ValidationError
+from .narrative import derive_narrative_relationships, load_narrative_config
 
 
 MANIFEST_PATH = Path("config/2017/corpus.json")
@@ -143,6 +144,7 @@ def assemble_corpus(repository_root: Path) -> CorpusData:
 
     data = CorpusData(
         manifest=manifest,
+        narrative=load_narrative_config(repository_root),
         players=players,
         staff=staff,
         season_statistics=season_statistics,
@@ -211,7 +213,7 @@ def validate_existing_corpus(
     except sqlite3.OperationalError as exc:
         raise ValidationError(f"cannot open normalized corpus {output_path}: {exc}") from exc
     try:
-        validate_database(connection)
+        validate_database(connection, derive_narrative_relationships(data))
     finally:
         connection.close()
     return corpus_summary(data)
