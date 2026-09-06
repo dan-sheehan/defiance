@@ -4,6 +4,7 @@ from contextlib import redirect_stderr
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import shutil
 import sqlite3
@@ -367,10 +368,12 @@ class ProductionPreflightTests(unittest.TestCase):
 
 class ReleaseCorpusPreflightTests(unittest.TestCase):
     def test_validated_release_corpus_passes_full_preflight_unchanged(self) -> None:
-        repository = Path(__file__).resolve().parents[1]
-        source_corpus = repository / "data" / "normalized" / "2017.sqlite3"
-        if not source_corpus.is_file():
-            self.skipTest("validated local 2017 corpus is not present")
+        artifact = os.environ.get("DEFIANCE_TEST_RELEASE_CORPUS")
+        if artifact is None:
+            self.skipTest("set DEFIANCE_TEST_RELEASE_CORPUS to verify the pinned release artifact")
+        self.assertTrue(artifact.strip(), "release artifact path must not be empty")
+        source_corpus = Path(artifact).expanduser().resolve()
+        self.assertTrue(source_corpus.is_file(), "supplied release artifact is not a file")
 
         with tempfile.TemporaryDirectory() as temporary_directory:
             volume = Path(temporary_directory) / "data"

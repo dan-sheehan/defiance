@@ -28,6 +28,15 @@ def _raw_corpus_is_present() -> bool:
     )
 
 
+class PackagedAliasesTest(unittest.TestCase):
+    def test_committed_aliases_are_available_in_the_installed_package(self) -> None:
+        aliases = answer._load_aliases()
+
+        self.assertEqual(aliases["schema_version"], 1)
+        self.assertIn("SDSU", aliases["team"])
+        self.assertIn("Rebels", aliases["opponents"]["UNLV"])
+
+
 class DeterministicRouterUnitTest(unittest.TestCase):
     def setUp(self) -> None:
         temporary = tempfile.TemporaryDirectory()
