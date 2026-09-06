@@ -9,6 +9,91 @@ The data path is deterministic:
 SDSU sources → preserved bytes → normalized rows → validation → SQLite
 ```
 
+## Run locally
+
+Use Python 3.12 and [`uv`](https://docs.astral.sh/uv/getting-started/installation/).
+Run all commands below from the repository root. `uv sync --locked` installs the
+package and its dependencies; no `PYTHONPATH` setting or frontend build is needed.
+
+```bash
+git clone https://github.com/dan-sheehan/defiance.git
+cd defiance
+uv sync --locked
+uv run --no-sync defiance --help
+uv run --no-sync python -m unittest discover -s tests -v
+```
+
+The initial tests run offline using committed fixtures. Tests requiring the full
+preserved corpus or a built database skip until that data is available. The
+separate pinned release-artifact test also skips unless explicitly enabled.
+
+### Acquire sources, then build and validate
+
+Raw SDSU documents and generated databases are not included in Git. If you
+already have the preserved files named in `config/2017/corpus.json` under
+`data/raw/`, skip acquisition and go straight to the offline build commands.
+Otherwise, acquire the sources:
+
+```bash
+uv run --no-sync defiance inventory-corpus
+git diff -- config/2017/corpus.json
+```
+
+`inventory-corpus` requires network access to SDSU. It rediscovers the archive,
+preserves downloaded bytes, and **rewrites `config/2017/corpus.json`**, including
+source hashes. It is not a download of the committed hash-pinned corpus. Review
+any inventory changes before treating the downloaded evidence as the reviewed
+corpus. Archive availability or source changes can prevent acquisition or
+validation; do not bypass failures or accept changed hashes automatically.
+
+Build and validate offline, then rerun the tests with the full corpus available:
+
+```bash
+uv run --no-sync defiance build-corpus
+uv run --no-sync defiance validate-corpus
+uv run --no-sync python -m unittest discover -s tests -v
+```
+
+Both corpus commands verify every available in-scope raw file against its
+inventory SHA-256. `build-corpus` parses and validates the evidence before
+loading `data/normalized/2017.sqlite3`; `validate-corpus` checks the existing
+database against the preserved evidence and normalized-corpus rules. Missing
+raw files, changed bytes, or invalid data cause explicit failures. Keep the raw
+files for future validation. Normal validation does not require the byte-level
+hash of a particular deployed SQLite artifact.
+
+### Use the CLI and web app
+
+```bash
+uv run --no-sync defiance show-game 2017-04-15-unlv
+uv run --no-sync defiance ask "How many home runs did Danny Sheehan hit in 2017?"
+uv run --no-sync flask --app 'defiance.web:create_app()' run
+```
+
+The CLI example should answer **7 home runs** with source links. Open
+[http://127.0.0.1:5000](http://127.0.0.1:5000) for the web app; stop the local
+server with Ctrl+C. It requires the built corpus and creates a separate writable
+`data/runtime/audit.sqlite3` for request audits. The corpus is read-only during
+questions and health checks. See [Mobile web application](#mobile-web-application)
+for path overrides and audit contents.
+
+### Optional exact release-artifact verification
+
+Ordinary full-corpus tests build and validate local data without a release hash.
+To check an existing copy of the exact pinned Railway artifact, explicitly
+supply its path:
+
+```bash
+DEFIANCE_TEST_RELEASE_CORPUS="/path/to/pinned-release.sqlite3" \
+  uv run --no-sync python -m unittest discover -s tests -p test_production.py -v
+```
+
+This test copies the supplied artifact to temporary local storage and calls the
+unchanged production preflight with its exact pinned SHA-256. A missing,
+corrupt, or different supplied artifact fails; no artifact is fetched or
+deployed. Omit `DEFIANCE_TEST_RELEASE_CORPUS` for normal local testing. A valid
+local rebuild need not have the same SQLite file bytes as the pinned release.
+
 ## 2017 corpus
 
 The reviewed inventory is committed at `config/2017/corpus.json`. It records the
@@ -85,8 +170,9 @@ vanilla JavaScript assets with no frontend build step. Each accepted request is
 independent; the application has no login, cookies, conversation transcript, or
 cross-request user identity.
 
-By default the server reads `data/normalized/2017.sqlite3` and writes anonymous
-request audits to `data/runtime/audit.sqlite3`. Override those paths with
+By default the server resolves paths from the current working directory, reads
+`data/normalized/2017.sqlite3`, and writes anonymous request audits to
+`data/runtime/audit.sqlite3`. Override those paths with
 `DEFIANCE_CORPUS_DATABASE` and `DEFIANCE_AUDIT_DATABASE`. They must resolve to
 different files. The corpus is opened read-only throughout the answer and
 health paths; only the runtime audit database is writable.
@@ -94,7 +180,7 @@ health paths; only the runtime audit database is writable.
 Run the local development server after building the validated corpus:
 
 ```bash
-PYTHONPATH=src uv run --no-sync flask --app 'defiance.web:create_app()' run
+uv run --no-sync flask --app 'defiance.web:create_app()' run
 ```
 
 `POST /api/ask` accepts exactly one JSON string field named `question`. Engine
@@ -110,6 +196,56 @@ answer text, failure reason when applicable, elapsed processing time, and the
 stable evidence source IDs, locators, and original SDSU URLs. It does not record
 accounts, IP addresses, user agents, cookies, conversational state, or any other
 cross-request identity.
+
+## CLI notes
+
+`ask` reads the generated full-corpus database and prints a short answer first,
+followed by compact source references and independently parseable suggestions
+when useful. Routing failures are exposed by the returned `AnswerResult` for
+offline evaluation; no private-testing threshold or automatic model-provider
+trigger is encoded in the application.
+
+`show-game` reads `data/normalized/2017.sqlite3`, the completed full corpus.
+The historical `build-slice` command fetches two sources and writes a separate
+`data/normalized/milestone1.sqlite3`; it is not a prerequisite for the current
+application, and `show-game` does not read that slice database.
+
+## Known archive gaps and conflicts
+
+SDSU has no archived box-score link for the May 20 Fresno State game, the May 28
+Fresno State Mountain West final, or the June 2 Long Beach State NCAA Regional
+game. Seventeen other available box reports omit their `GAME.PLY` section, so
+play-by-play is unavailable for 20 games in total. The SDSU PDF link for final
+season statistics returns 404; the complete SDSU HTML statistics remain
+available and are ingested.
+
+Five contradictions are retained in both the inventory and database:
+
+- April 13 at UNLV: schedule 3–6, box score 3–7;
+- April 25 vs. UC Riverside: schedule 4–6, box score 4–7;
+- home record: schedule 19–12, final statistics 19–11;
+- away record: schedule 19–8, final statistics 19–9;
+- conference record: SDSU's NCAA Central page 21–10, final statistics 20–10.
+
+The contemporaneous box scores control the two game scores, and the final
+season-statistics page controls the record summaries. These resolutions follow
+the PRD's source-authority order while preserving both reported values. Optional
+game statistics absent from a source are stored as `NULL`; zero is used only
+when the source explicitly supplies that category.
+
+Defiance-authored code is covered by this repository's MIT license. SDSU source
+material remains the property of its original publisher and is preserved only
+as local evidence or small test fixtures.
+
+## Railway operator reference
+
+These existing instructions apply to one pinned release artifact, not local
+setup. Hosting prices and provider behavior below are historical notes and
+must be rechecked before a deployment. A freshly built local corpus is not a
+substitute for the pinned artifact. No Railway account is needed to run locally.
+
+<details>
+<summary>Existing release deployment, audit export, and rollback instructions</summary>
 
 ## Production deployment on Railway
 
@@ -154,8 +290,8 @@ rebuilding or contacting SDSU:
 
 ```bash
 uv sync --locked
-PYTHONPATH=src uv run --no-sync python -m defiance.cli validate-corpus
-PYTHONPATH=src uv run --no-sync python -m unittest discover -s tests -v
+uv run --no-sync defiance validate-corpus
+uv run --no-sync python -m unittest discover -s tests -v
 shasum -a 256 data/normalized/2017.sqlite3
 ```
 
@@ -346,69 +482,4 @@ The volume listing must not contain a `-journal`, `-wal`, or `-shm` file for the
 corpus. It may contain transient SQLite files for the separate writable audit
 database while requests are active.
 
-## Commands
-
-The repository uses Python 3.12 and [`uv`](https://docs.astral.sh/uv/). Use the
-source tree directly:
-
-```bash
-PYTHONPATH=src uv run --no-sync python -m defiance.cli inventory-corpus
-PYTHONPATH=src uv run --no-sync python -m defiance.cli build-corpus
-PYTHONPATH=src uv run --no-sync python -m defiance.cli validate-corpus
-PYTHONPATH=src uv run --no-sync python -m defiance.cli show-game 2017-04-15-unlv
-PYTHONPATH=src uv run --no-sync python -m defiance.cli ask "How many home runs did Danny Sheehan hit in 2017?"
-PYTHONPATH=src uv run --no-sync python -m unittest discover -s tests -v
-```
-
-`inventory-corpus` contacts the SDSU archive, rechecks the reviewed discovery
-boundary, and preserves source bytes. `build-corpus` and `validate-corpus` are
-offline: they verify every available in-scope raw file against its inventory
-hash before parsing or querying the database.
-
-Downloaded documents and generated SQLite databases stay out of Git. The test
-suite uses small committed source-format fixtures for roster, schedule, season
-batting, season pitching, team facts, box scores, and recaps. Those parser and
-grouping tests run offline in a clean checkout; the exhaustive full-corpus
-integration test runs when the preserved local corpus is present and otherwise
-skips.
-
-`ask` reads the generated full-corpus database and prints a short answer first,
-followed by compact source references and independently parseable suggestions
-when useful. Routing failures are exposed by the returned `AnswerResult` for
-offline evaluation; no private-testing threshold or automatic model-provider
-trigger is encoded in the application.
-
-`show-game` reads the completed corpus database. The original one-game builder
-remains available separately, and its game is also present in the full corpus:
-
-```bash
-PYTHONPATH=src uv run --no-sync python -m defiance.cli build-slice
-PYTHONPATH=src uv run --no-sync python -m defiance.cli show-game 2017-02-17-pacific
-```
-
-## Known archive gaps and conflicts
-
-SDSU has no archived box-score link for the May 20 Fresno State game, the May 28
-Fresno State Mountain West final, or the June 2 Long Beach State NCAA Regional
-game. Seventeen other available box reports omit their `GAME.PLY` section, so
-play-by-play is unavailable for 20 games in total. The SDSU PDF link for final
-season statistics returns 404; the complete SDSU HTML statistics remain
-available and are ingested.
-
-Five contradictions are retained in both the inventory and database:
-
-- April 13 at UNLV: schedule 3–6, box score 3–7;
-- April 25 vs. UC Riverside: schedule 4–6, box score 4–7;
-- home record: schedule 19–12, final statistics 19–11;
-- away record: schedule 19–8, final statistics 19–9;
-- conference record: SDSU's NCAA Central page 21–10, final statistics 20–10.
-
-The contemporaneous box scores control the two game scores, and the final
-season-statistics page controls the record summaries. These resolutions follow
-the PRD's source-authority order while preserving both reported values. Optional
-game statistics absent from a source are stored as `NULL`; zero is used only
-when the source explicitly supplies that category.
-
-Defiance-authored code is covered by this repository's MIT license. SDSU source
-material remains the property of its original publisher and is preserved only
-as local evidence or small test fixtures.
+</details>

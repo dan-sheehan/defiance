@@ -1,5 +1,9 @@
 # Defiance V1 — Minimal Foundation and Milestone 1
 
+> Historical plan for the completed foundation and Milestone 1. The exclusions
+> and deferred work below describe that milestone, not the current application.
+> See `README.md` for current setup and usage, and `PRD.md` for product scope.
+
 ## Minimal Repository Foundation
 
 Create only what is necessary to make the public repository understandable and begin the vertical slice:

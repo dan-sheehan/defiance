@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from contextlib import chdir
 from hashlib import sha256
 import json
+import os
 from pathlib import Path
 import sqlite3
 import tempfile
@@ -67,6 +69,40 @@ class WebApplicationTest(unittest.TestCase):
         with sqlite3.connect(self.audit) as connection:
             row = connection.execute("SELECT COUNT(*) FROM ask_requests").fetchone()
         return int(row[0])
+
+    def test_default_paths_use_the_working_directory(self) -> None:
+        corpus = self.root / "data" / "normalized" / "2017.sqlite3"
+        corpus.parent.mkdir(parents=True)
+        corpus.write_bytes(self.corpus.read_bytes())
+        with chdir(self.root), patch.dict(os.environ, {}, clear=True):
+            app = create_app()
+
+        self.assertEqual(app.config["CORPUS_DATABASE"], corpus.resolve())
+        self.assertEqual(
+            app.config["AUDIT_DATABASE"],
+            (self.root / "data" / "runtime" / "audit.sqlite3").resolve(),
+        )
+        self.assertEqual(app.test_client().get("/healthz").status_code, 200)
+
+    def test_explicit_paths_override_environment_paths(self) -> None:
+        with patch.dict(os.environ, {
+            "DEFIANCE_CORPUS_DATABASE": str(self.root / "missing.sqlite3"),
+            "DEFIANCE_AUDIT_DATABASE": str(self.root / "unused.sqlite3"),
+        }):
+            app = create_app(corpus_path=self.corpus, audit_path=self.audit)
+
+        self.assertEqual(app.config["CORPUS_DATABASE"], self.corpus.resolve())
+        self.assertEqual(app.config["AUDIT_DATABASE"], self.audit.resolve())
+
+    def test_environment_paths_override_defaults(self) -> None:
+        with patch.dict(os.environ, {
+            "DEFIANCE_CORPUS_DATABASE": str(self.corpus),
+            "DEFIANCE_AUDIT_DATABASE": str(self.audit),
+        }):
+            app = create_app()
+
+        self.assertEqual(app.config["CORPUS_DATABASE"], self.corpus.resolve())
+        self.assertEqual(app.config["AUDIT_DATABASE"], self.audit.resolve())
 
     def test_homepage_and_packaged_assets(self) -> None:
         response = self.client.get("/")

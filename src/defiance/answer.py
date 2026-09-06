@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
+from importlib.resources import files
 from pathlib import Path
 import json
 import re
@@ -25,7 +26,7 @@ from .query import (
 )
 
 
-ALIASES_PATH = Path(__file__).resolve().parents[2] / "config" / "2017" / "question_aliases.json"
+ALIASES_PATH = files("defiance").joinpath("question_aliases.json")
 ANSWER_STATUSES = frozenset(
     {
         "answered",

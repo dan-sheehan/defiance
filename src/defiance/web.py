@@ -22,9 +22,8 @@ from .audit import (
 from .query import QueryError
 
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_CORPUS_DATABASE = REPOSITORY_ROOT / "data" / "normalized" / "2017.sqlite3"
-DEFAULT_AUDIT_DATABASE = REPOSITORY_ROOT / "data" / "runtime" / "audit.sqlite3"
+DEFAULT_CORPUS_DATABASE = Path("data/normalized/2017.sqlite3")
+DEFAULT_AUDIT_DATABASE = Path("data/runtime/audit.sqlite3")
 MAX_QUESTION_CHARACTERS = 500
 MAX_REQUEST_BYTES = 8 * 1024
 PUBLIC_SOURCE_HOSTS = frozenset(
